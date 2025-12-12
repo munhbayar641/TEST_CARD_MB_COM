@@ -320,67 +320,6 @@
       width: 100%;
       min-width: 80px;
     }
-    /* Login Modal Styles */
-    .login-modal {
-      display: flex;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(5px);
-      z-index: 10000;
-      align-items: center;
-      justify-content: center;
-    }
-    .login-modal.hidden {
-      display: none;
-    }
-    .login-card {
-      background: var(--card);
-      border-radius: 20px;
-      padding: 40px;
-      box-shadow: 0 20px 60px -12px rgba(0, 0, 0, 0.3);
-      max-width: 400px;
-      width: 90%;
-    }
-    .login-card h2 {
-      margin: 0 0 24px;
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--text);
-      text-align: center;
-    }
-    .login-form {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-    .login-form input[type="text"],
-    .login-form input[type="password"] {
-      width: 100%;
-      padding: 14px 18px;
-      border-radius: 12px;
-      border: 2px solid var(--border);
-      background: #fff;
-      color: var(--text);
-      font-size: 15px;
-      font-family: inherit;
-      transition: all 0.2s ease;
-    }
-    .login-form input[type="text"]:focus,
-    .login-form input[type="password"]:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    }
-    .login-error {
-      color: var(--error);
-      font-size: 14px;
-      margin-top: -10px;
-      text-align: center;
-    }
   </style>
   <!-- SheetJS CDN for reading Excel files -->
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -389,43 +328,10 @@
   <script src="https://accounts.google.com/gsi/client"></script>
 </head>
  <body>
-   <!-- Login Modal -->
-   <div id="login-modal" class="login-modal">
-     <div class="login-card">
-       <h2>🔐 Нэвтрэх</h2>
-       <form id="login-form" class="login-form">
-         <div>
-           <label>Нэвтрэх нэр</label>
-           <input type="text" id="login-username" required autocomplete="username" />
-         </div>
-         <div>
-           <label>Нууц үг</label>
-           <input type="password" id="login-password" required autocomplete="current-password" />
-         </div>
-         <div id="login-error" class="login-error" style="display: none;"></div>
-         <button type="submit">Нэвтрэх</button>
-       </form>
-     </div>
-   </div>
-
-   <div class="container" id="main-content" style="display: none;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <div>
-        <h1 style="margin: 0 0 8px;">📊 РХАХТА РХА-Н тавилын карт</h1>
-        <p class="sub" style="margin: 0;">Боломжгүй зүйл гэж байхгүй.</p>
-      </div>
-      <div id="user-info" style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <div style="text-align: right;">
-            <div style="font-weight: 600; color: #fff; font-size: 14px;" id="user-name">-</div>
-            <div style="font-size: 12px; color: rgba(255,255,255,0.8);" id="user-role">-</div>
-          </div>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <button id="change-password-btn" style="padding: 8px 16px; font-size: 12px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: #fff; border-radius: 6px; cursor: pointer;">🔑 Нууц үг солих</button>
-          <button id="logout-btn" style="padding: 8px 16px; font-size: 12px; background: rgba(239, 68, 68, 0.8); border: 1px solid rgba(239, 68, 68, 0.9); color: #fff; border-radius: 6px; cursor: pointer;">🚪 Гарах</button>
-        </div>
-      </div>
+   <div class="container" id="main-content">
+    <div style="margin-bottom: 16px;">
+      <h1 style="margin: 0 0 8px;">📊 РХАХТА РХА-Н тавилын карт</h1>
+      <p class="sub" style="margin: 0;">Боломжгүй зүйл гэж байхгүй.</p>
     </div>
      <div class="tabs">
        <button class="tab active" id="tab-home">🏠 Нүүр</button>
@@ -441,8 +347,52 @@
         <select id="google-sheets-url" style="width: 100%; padding: 12px 16px; border-radius: 10px; border: 2px solid var(--border); background: #fff; color: var(--text); font-size: 14px; font-family: inherit; transition: all 0.2s ease;">
           <option value="https://docs.google.com/spreadsheets/d/1l_avCSP5aogtMvHYr2IL9vz3WY8ToYvBp-el28rI4Z0/edit?pli=1&gid=1366441472#gid=1366441472">Буянт Ухаа</option>
         </select>
+         <button id="login-google" style="margin-top: 8px; background: var(--accent); color: white;">🔐 Google-д нэвтрэх</button>
          <button id="load-google-sheets" style="margin-top: 8px;">📥 Google Sheets унших</button>
-         <p class="tip-text">💡 Google Sheets → Share → "Anyone with the link" → "Viewer" сонгох</p>
+         <p class="tip-text">💡 Зөвлөмж: Эхлээд "Google-д нэвтрэх" дараад, дараагийн уншилт/бичилт хурдан болно</p>
+         <details style="margin-top: 12px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid var(--border);">
+           <summary style="cursor: pointer; font-weight: 600; color: var(--text);">⚡ Олон шатлалт баталгаажуулалтыг багасгах</summary>
+           <div style="margin-top: 12px; padding-left: 8px; font-size: 13px; color: var(--muted); line-height: 1.8;">
+             <p><strong>Google-д нэвтрэхэд олон шатлалт баталгаажуулалт хийхгүй байх:</strong></p>
+             <ul style="margin-left: 20px; margin-top: 8px;">
+               <li><strong>1. OAuth Consent Screen-ийг бүрэн verification хийх (ЗӨВЛӨМЖ):</strong></li>
+               <li style="margin-left: 20px;">Google Cloud Console → OAuth consent screen → "PUBLISH APP" → Verification хийх</li>
+               <li style="margin-left: 20px;">Verification дууссаны дараа олон шатлалт баталгаажуулалт алга болно</li>
+               
+               <li style="margin-top: 12px;"><strong>2. Test User ашиглах (Хурдан арга):</strong></li>
+               <li style="margin-left: 20px;">OAuth consent screen → "Test users" → Email нэмэх</li>
+               <li style="margin-left: 20px;">Test user-ээр нэвтрэхэд баталгаажуулалт бага</li>
+               
+               <li style="margin-top: 12px;"><strong>3. Одоогийн байдал:</strong></li>
+               <li style="margin-left: 20px;">Token хадгалагдсан тул дараагийн удаад нэвтрэхгүй (1 удаа л баталгаажуулна)</li>
+               <li style="margin-left: 20px;">Browser-ийн cookie/session хадгалагдсан байвал илүү хурдан</li>
+             </ul>
+           </div>
+         </details>
+         <details style="margin-top: 12px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid var(--border);">
+           <summary style="cursor: pointer; font-weight: 600; color: var(--text);">🔒 Restricted Google Sheets тохируулах</summary>
+           <div style="margin-top: 12px; padding-left: 8px; font-size: 13px; color: var(--muted); line-height: 1.8;">
+             <p><strong>1. Google Sheets-ийг Restricted болгох:</strong></p>
+             <ul style="margin-left: 20px; margin-top: 8px;">
+               <li>Google Sheets → <strong>Share</strong> товч дарах</li>
+               <li><strong>"Restrict"</strong> сонгох (эсвэл "Change to restricted" / "Хязгаарлах")</li>
+               <li><strong>"Editor"</strong> эрхтэй email address-ууд нэмэх</li>
+             </ul>
+             
+             <p style="margin-top: 16px;"><strong>2. Application-аас хандах:</strong></p>
+             <ul style="margin-left: 20px; margin-top: 8px;">
+               <li>"Google-д нэвтрэх" товчийг дарахад <strong>Share дээр нэмсэн email-ээрээ</strong> нэвтэрнэ үү</li>
+               <li>Хэрэв өөр email-ээр нэвтэрсэн бол Google Sheets хандалт үгүй болно</li>
+               <li>Share → <strong>"Editor"</strong> эрх шаардлагатай (унших, бичих аль аль нь)</li>
+             </ul>
+             
+             <p style="margin-top: 16px;"><strong>3. Алдаа гарвал:</strong></p>
+             <ul style="margin-left: 20px; margin-top: 8px;">
+               <li>"403 Forbidden" алдаа → Share дээр email-ийг нэмээгүй эсвэл "Viewer" эрх өгсөн</li>
+               <li>Шийдэл: Share → Email-ийг нэмээд <strong>"Editor"</strong> эрх өгөх</li>
+             </ul>
+           </div>
+         </details>
       </div>
       <div>
         <label>Google OAuth 2.0 Client ID (Хадгалахад шаардлагатай)</label>
@@ -490,210 +440,6 @@
   </div>
 
   <script>
-    // Login Logic
-    const loginModal = document.getElementById("login-modal");
-    const loginForm = document.getElementById("login-form");
-    const loginUsername = document.getElementById("login-username");
-    const loginPassword = document.getElementById("login-password");
-    const loginError = document.getElementById("login-error");
-    const mainContent = document.getElementById("main-content");
-    
-    // Нэвтрэх нэр, нууц үг
-    const USERS = {
-      "mb": { password: "123", role: "admin" }, // Админ - бүх эрхтэй
-      "op": { password: "123", role: "operator" } // Оператор - тавил оруулах эрхгүй
-    };
-    
-    // Session storage-оос нэвтрэлтийг шалгах
-    const isLoggedIn = sessionStorage.getItem("isLoggedIn") === "true";
-    const userRole = sessionStorage.getItem("userRole") || null;
-    
-    if (isLoggedIn) {
-      loginModal.classList.add("hidden");
-      mainContent.style.display = "block";
-      // User role-оос хамааран UI-г тохируулах
-      applyUserRole(userRole);
-    } else {
-      loginModal.classList.remove("hidden");
-      mainContent.style.display = "none";
-    }
-    
-    loginForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      
-      const username = loginUsername.value.trim();
-      const password = loginPassword.value.trim();
-      
-      const user = USERS[username];
-      
-      if (user && user.password === password) {
-        // Зөв нэвтрэх нэр, нууц үг
-        sessionStorage.setItem("isLoggedIn", "true");
-        sessionStorage.setItem("userRole", user.role);
-        sessionStorage.setItem("username", username);
-        loginModal.classList.add("hidden");
-        mainContent.style.display = "block";
-        loginError.style.display = "none";
-        loginError.textContent = "";
-        // User info-г шинэчлэх
-        updateUserInfo(username, user.role);
-        // User role-оос хамааран UI-г тохируулах
-        applyUserRole(user.role);
-      } else {
-        // Буруу нэвтрэх нэр, нууц үг
-        loginError.textContent = "❌ Буруу нэвтрэх нэр эсвэл нууц үг!";
-        loginError.style.display = "block";
-        loginPassword.value = "";
-      }
-    });
-    
-    // User info-г шинэчлэх функц
-    function updateUserInfo(username, role) {
-      const userNameEl = document.getElementById("user-name");
-      const userRoleEl = document.getElementById("user-role");
-      
-      if (userNameEl) {
-        userNameEl.textContent = username.toUpperCase();
-      }
-      
-      if (userRoleEl) {
-        const roleText = role === "admin" ? "Админ (Бүх эрхтэй)" : "Оператор (Харах эрхтэй)";
-        userRoleEl.textContent = roleText;
-      }
-    }
-    
-    // Эхлээд нэвтэрсэн user-ийн мэдээллийг харуулах
-    if (isLoggedIn && userRole) {
-      const username = sessionStorage.getItem("username") || "";
-      updateUserInfo(username, userRole);
-    }
-    
-    // Нууц үг солих modal
-    const changePasswordModal = document.createElement("div");
-    changePasswordModal.id = "change-password-modal";
-    changePasswordModal.className = "login-modal hidden";
-    changePasswordModal.innerHTML = `
-      <div class="login-card">
-        <h2>🔑 Нууц үг солих</h2>
-        <form id="change-password-form" class="login-form">
-          <div>
-            <label>Одоогийн нууц үг</label>
-            <input type="password" id="current-password" required />
-          </div>
-          <div>
-            <label>Шинэ нууц үг</label>
-            <input type="password" id="new-password" required />
-          </div>
-          <div>
-            <label>Шинэ нууц үг (давтах)</label>
-            <input type="password" id="confirm-password" required />
-          </div>
-          <div id="change-password-error" class="login-error" style="display: none;"></div>
-          <div style="display: flex; gap: 8px;">
-            <button type="submit" style="flex: 1;">Солих</button>
-            <button type="button" id="cancel-change-password" style="flex: 1; background: var(--muted);">Цуцлах</button>
-          </div>
-        </form>
-      </div>
-    `;
-    document.body.appendChild(changePasswordModal);
-    
-    // Нууц үг солих button event listener
-    document.getElementById("change-password-btn").addEventListener("click", () => {
-      changePasswordModal.classList.remove("hidden");
-    });
-    
-    // Цуцлах button event listener
-    document.getElementById("cancel-change-password").addEventListener("click", () => {
-      changePasswordModal.classList.add("hidden");
-      document.getElementById("change-password-form").reset();
-      document.getElementById("change-password-error").style.display = "none";
-    });
-    
-    // Нууц үг солих form event listener
-    document.getElementById("change-password-form").addEventListener("submit", (e) => {
-      e.preventDefault();
-      
-      const currentPassword = document.getElementById("current-password").value.trim();
-      const newPassword = document.getElementById("new-password").value.trim();
-      const confirmPassword = document.getElementById("confirm-password").value.trim();
-      const errorEl = document.getElementById("change-password-error");
-      
-      const username = sessionStorage.getItem("username") || "";
-      const user = USERS[username];
-      
-      if (!user || user.password !== currentPassword) {
-        errorEl.textContent = "❌ Одоогийн нууц үг буруу байна!";
-        errorEl.style.display = "block";
-        return;
-      }
-      
-      if (newPassword !== confirmPassword) {
-        errorEl.textContent = "❌ Шинэ нууц үг таарахгүй байна!";
-        errorEl.style.display = "block";
-        return;
-      }
-      
-      if (newPassword.length < 3) {
-        errorEl.textContent = "❌ Шинэ нууц үг хамгийн багадаа 3 тэмдэгт байх ёстой!";
-        errorEl.style.display = "block";
-        return;
-      }
-      
-      // Нууц үг солих
-      USERS[username].password = newPassword;
-      errorEl.textContent = "✅ Нууц үг амжилттай солигдлоо!";
-      errorEl.style.display = "block";
-      errorEl.style.color = "var(--success)";
-      
-      setTimeout(() => {
-        changePasswordModal.classList.add("hidden");
-        document.getElementById("change-password-form").reset();
-        errorEl.style.display = "none";
-        errorEl.style.color = "var(--error)";
-      }, 1500);
-    });
-    
-    // Logout button event listener
-    document.getElementById("logout-btn").addEventListener("click", () => {
-      if (confirm("Та гарахдаа итгэлтэй байна уу?")) {
-        sessionStorage.removeItem("isLoggedIn");
-        sessionStorage.removeItem("userRole");
-        sessionStorage.removeItem("username");
-        loginModal.classList.remove("hidden");
-        mainContent.style.display = "none";
-        loginUsername.value = "";
-        loginPassword.value = "";
-        loginError.style.display = "none";
-        loginError.textContent = "";
-      }
-    });
-    
-    // User role-оос хамааран UI-г тохируулах функц
-    function applyUserRole(role) {
-      const saveToGoogleSheetsBtn = document.getElementById("save-to-google-sheets");
-      
-      if (role === "operator") {
-        // Оператор user - тавил оруулах баганыг read-only болгох
-        // "☁️ Google Sheets дээр хадгалах" товчийг нуух
-        if (saveToGoogleSheetsBtn) {
-          saveToGoogleSheetsBtn.style.display = "none";
-        }
-        console.log("Оператор user нэвтэрлээ - тавил оруулах эрхгүй");
-      } else {
-        // Админ user - бүх эрхтэй
-        // "☁️ Google Sheets дээр хадгалах" товчийг харуулах
-        if (saveToGoogleSheetsBtn) {
-          saveToGoogleSheetsBtn.style.display = "block";
-        }
-        console.log("Админ user нэвтэрлээ - бүх эрхтэй");
-      }
-      
-      // Хүснэгтийг дахин render хийх (user role-оос хамааран editable багана өөрчлөгдөх)
-      if (sheetData && sheetData.length > 0) {
-        applyFilter();
-      }
-    }
 
     const googleSheetsUrlInput = document.getElementById("google-sheets-url");
     const loadGoogleSheetsBtn = document.getElementById("load-google-sheets");
@@ -720,6 +466,7 @@
     let originalFileName = null; // Google Sheets нэр
     let googleSheetId = null; // Google Sheets ID (хадгалахад ашиглана)
     let googleSheetGid = "0"; // Google Sheets GID (хадгалахад ашиглана)
+    let sheetNameToGidMap = {}; // Sheet name -> GID mapping (хадгалахад ашиглана)
     let footerData = []; // Footer мөрүүд (15-18-р мөрүүд)
     let headerRowIndex = 1; // Google Sheets дээрх header мөрийн дугаар (1-based, default = row 1)
 
@@ -862,8 +609,13 @@
         oorchloltHeader: oorchloltHeaderIndex >= 0 ? viewHeaders[oorchloltHeaderIndex] : "Олдсонгүй"
       });
       
+      // Sheet-ийн нэрэнд "IP" байгаа эсэхийг шалгах (renderTable функц дотор эхэлж тодорхойлох)
+      const currentSheetName = sheetSelect.value || "";
+      const isIPSheet = /IP/i.test(currentSheetName);
+      
       // Хэрэв "өөрчлөлт" header олдохгүй бол, сүүлийн баганыг editable болгох (fallback)
-      if (oorchloltHeaderIndex < 0) {
+      // IP sheet-ийн тохиолдолд энэ warning хэвлэхгүй
+      if (oorchloltHeaderIndex < 0 && !isIPSheet) {
         console.warn("'өөрчлөлт' header олдсонгүй! Сүүлийн баганыг editable болгох fallback ашиглаж байна.");
       }
       
@@ -892,30 +644,34 @@
           // "Өөрчлөлт 1", "Өөрчлөлт 2" гэх мэт багануудыг шалгах (read-only)
           const isOorchloltVersion = /^өөрчлөлт\s+\d+$/i.test(headerStr);
           
-          // User role-ийг шалгах
-          const userRole = sessionStorage.getItem("userRole") || "admin";
-          const isOperator = userRole === "operator";
-          
           // "Тавил оруулах" (өөрчлөлтүүд) баганыг editable болгох
           // Гэхдээ "Өөрчлөлт 1", "Өөрчлөлт 2" гэх мэт баганууд биш
-          // Мөн оператор user-д editable биш
+          // Хэрэв IP sheet бол эхний 2 баганаас бусад багануудыг editable болгох
           let isEditable = false;
           
-          if (!isOorchloltVersion && !isOperator) {
-            // "өөрчлөлтүүд" эсвэл "тавил оруулах" гэсэн header-ийг олох
-            isEditable = /^өөрчлөлтүүд$/i.test(headerStr) || 
-                        /^тавил оруулах$/i.test(headerStr) ||
-                        (oorchloltHeaderIndex >= 0 && colIdx === oorchloltHeaderIndex);
-            
-            // Fallback: хэрэв "өөрчлөлт" header олдохгүй бол, сүүлийн баганыг editable болгох
-            // Гэхдээ зөвхөн "Өөрчлөлт N" биш багана
-            if (!isEditable && oorchloltHeaderIndex < 0 && colIdx === viewHeaders.length - 1 && !isOorchloltVersion) {
+          if (isIPSheet) {
+            // IP sheet: эхний 3 баганаас бусад багануудыг editable болгох
+            if (colIdx >= 3) {
               isEditable = true;
-              console.log("Fallback: Сүүлийн баганыг editable болгож байна:", {
-                header: h,
-                colIdx,
-                viewHeadersLength: viewHeaders.length
-              });
+            }
+          } else {
+            // Бусад sheet: зөвхөн "Тавил оруулах" баганыг editable болгох
+            if (!isOorchloltVersion) {
+              // "өөрчлөлтүүд" эсвэл "тавил оруулах" гэсэн header-ийг олох
+              isEditable = /^өөрчлөлтүүд$/i.test(headerStr) || 
+                          /^тавил оруулах$/i.test(headerStr) ||
+                          (oorchloltHeaderIndex >= 0 && colIdx === oorchloltHeaderIndex);
+              
+              // Fallback: хэрэв "өөрчлөлт" header олдохгүй бол, сүүлийн баганыг editable болгох
+              // Гэхдээ зөвхөн "Өөрчлөлт N" биш багана
+              if (!isEditable && oorchloltHeaderIndex < 0 && colIdx === viewHeaders.length - 1 && !isOorchloltVersion) {
+                isEditable = true;
+                console.log("Fallback: Сүүлийн баганыг editable болгож байна:", {
+                  header: h,
+                  colIdx,
+                  viewHeadersLength: viewHeaders.length
+                });
+              }
             }
           }
           
@@ -938,8 +694,10 @@
           if (isEditable) {
             // "өөрчлөлтүүд" багана (одоо "Тавил оруулах" гэж харагдана) - засварлах боломжтой
             const finalValue = escapedVal || "";
+            // Анхны утгыг data attribute-оор хадгалах (IP sheet-ийн тохиолдолд хадгалах логикт ашиглана)
+            const initialValueAttr = finalValue.replace(/"/g, '&quot;');
             // Input field-д disabled эсвэл readonly attribute байхгүй байх ёстой
-            rowHtml += `<td><input type="text" data-row="${row.__rowIndex}" data-field="${h}" value="${finalValue}" class="editable-input" style="width: 100%; padding: 6px 10px; border: 2px solid var(--border); border-radius: 6px; background: #fff; cursor: text;"></td>`;
+            rowHtml += `<td><input type="text" data-row="${row.__rowIndex}" data-field="${h}" data-initial-value="${initialValueAttr}" value="${finalValue}" class="editable-input" style="width: 100%; padding: 6px 10px; border: 2px solid var(--border); border-radius: 6px; background: #fff; cursor: text;"></td>`;
             
             // Debug: эхний мөрөнд input field render хийгдэж байгаа эсэхийг шалгах
             if (rowIdx === 0) {
@@ -1119,45 +877,6 @@
 
         const scoreRow = (row, idx) => {
           const nonEmpty = row.filter(c => (c ?? "").toString().trim() !== "").length;
-          const rowText = row.map(c => (c ?? "").toString().trim().toLowerCase()).join(" ");
-          
-          // Title мөрийг шалгах (ихэвчлэн 1-р мөрөнд байдаг, "дэд станц", "тавил" гэх мэт үгс агуулна)
-          // Title мөр нь ихэвчлэн зөвхөн 1 баганад утга байдаг (A багана), header мөр нь олон баганад утга байдаг
-          const firstCell = row[0] ? String(row[0]).trim() : "";
-          const hasTitleKeywords = /дэд станц/i.test(rowText) || 
-            /тавил/i.test(rowText) || 
-            /10кв/i.test(rowText) || 
-            /10kb/i.test(rowText) ||
-            /гарсан шугамын/i.test(rowText);
-          
-          // Title мөр нь зөвхөн 1 баганад утга байдаг эсвэл 2-3 баганад бага утга байдаг
-          const isTitle = (idx === 0 && hasTitleKeywords && (
-            nonEmpty <= 1 || 
-            (nonEmpty <= 2 && firstCell && row.slice(1).filter(c => c && String(c).trim() !== "").length <= 1)
-          ));
-          
-          if (isTitle) {
-            console.log(`Title мөр олдлоо (мөр ${idx + 1}):`, row.slice(0, 3));
-            return -10000; // Title мөрийг header гэж тооцохгүй (илүү их сөрөг оноо)
-          }
-          
-          // Хэрэв 1-р мөрөнд зөвхөн 1-2 баганад утга байвал title мөр байж магадгүй
-          if (idx === 0 && nonEmpty <= 2 && firstCell && !hasTitleKeywords) {
-            // Header мөрийн тэмдэглэгээ байгаа эсэхийг шалгах
-            const hasHeaderKeywords = row.some(c => {
-              const val = String(c).trim().toLowerCase();
-              return /^тоноглолын нэр$/i.test(val) || 
-                     /^д\/д$/i.test(val) || 
-                     /^хамгаалалтын төрөл$/i.test(val) ||
-                     /^параметр$/i.test(val) ||
-                     /^тавилын утга$/i.test(val) ||
-                     /^өөрчлөлт/i.test(val);
-            });
-            if (!hasHeaderKeywords) {
-              console.log(`1-р мөр title мөр байж магадгүй (бага утгатай):`, row.slice(0, 3));
-              return -10000; // Title мөр байж магадгүй
-            }
-          }
           
           // Хоосон мөрийг header гэж тооцохгүй
           if (nonEmpty === 0) {
@@ -1190,9 +909,6 @@
             return /өөрчлөлт/i.test(val);
           });
           
-          // Header мөр нь ихэвчлэн 2-10 мөрөнд байдаг, гэхдээ 3-р мөрөнд ихэвчлэн байдаг
-          const positionBonus = (idx === 2) ? 20 : (idx >= 2 && idx < 10) ? 10 : (idx >= 1 && idx < 10 ? 3 : 0);
-          
           // Header мөрийн оноо - олон header тэмдэглэгээ байх нь чухал
           let score = nonEmpty * 2; // Олон баганад утга байх нь header мөрийн шинж
           if (hasTonog) score += 25;
@@ -1208,67 +924,22 @@
             score += 50; // 3-аас олон header тэмдэглэгээ байвал энэ нь header мөр байх магадлалтай
           }
           
+          // Header мөр нь ихэвчлэн 1-р мөр эсвэл 3-р мөрөнд байдаг
+          const positionBonus = (idx === 0 && headerCount >= 3) ? 30 : // 1-р мөрөнд header keywords байвал илүү өндөр оноо
+                                (idx === 2) ? 20 : 
+                                (idx >= 1 && idx < 10) ? 10 : 
+                                (idx >= 0 && idx < 10) ? 3 : 0;
+          
           return score + positionBonus;
         };
 
-        // Header мөрийг олох (эхний 15 мөрөнд хайх)
-        const searchRange = Math.min(15, rows.length);
-        let headerIdx = -1;
-        let bestScore = -Infinity;
+        // Header мөрийг олох - 1-р мөрийг шууд header мөр гэж ашиглах
+        let headerIdx = 0; // Зөвхөн 1-р мөрийг header мөр гэж ашиглах
+        let bestScore = 100; // Score шаардлагагүй, шууд 1-р мөр
         
-        // Эхлээд header keywords байгаа мөрийг олох
-        for (let i = 0; i < searchRange; i++) {
-          const score = scoreRow(rows[i], i);
-          const rowPreview = rows[i].slice(0, 6).map(c => (c ?? "").toString().trim().substring(0, 15));
-          console.log(`Мөр ${i + 1} оноо: ${score}`, rowPreview);
-          
-          // 1-р мөрийг (title мөр) header гэж тооцохгүй - заавал алгасах
-          if (i === 0) {
-            console.log(`1-р мөрийг алгасаж байна (title мөр)`);
-            continue;
-          }
-          
-          // Зөвхөн эерэг оноотой мөрүүдийг авч үзэх
-          if (score > bestScore && score > 0) {
-            bestScore = score;
-            headerIdx = i;
-          }
-        }
+        console.log(`1-р мөрийг header мөр гэж сонголоо (headerIdx=${headerIdx})`);
+        console.log("Header мөрийн утгууд:", rows[headerIdx]);
         
-        // Хэрэв header мөр олдохгүй бол 3-р мөрийг header гэж үзэх (fallback)
-        if (headerIdx < 0 || bestScore <= 0) {
-          console.warn(`Header мөр автоматаар олдсонгүй (headerIdx=${headerIdx}, score=${bestScore}), 3-р мөрийг header гэж үзэж байна`);
-          // 3-р мөр (index 2) нь ихэвчлэн header мөр байдаг
-          if (rows.length > 2) {
-            const score3 = scoreRow(rows[2], 2);
-            const row3Preview = rows[2].slice(0, 6).map(c => (c ?? "").toString().trim());
-            console.log(`3-р мөрийн оноо: ${score3}`, row3Preview);
-            
-            // 3-р мөрийг header гэж үзэх (онооноос үл хамааран, учир нь ихэвчлэн header мөр энд байдаг)
-            headerIdx = 2;
-            bestScore = score3 > 0 ? score3 : 100; // Заавал header мөр гэж үзэх
-            console.log(`3-р мөрийг header гэж сонголоо (headerIdx=${headerIdx}, score=${bestScore})`);
-          } else if (rows.length > 1) {
-            // Хэрэв зөвхөн 2 мөр байвал 2-р мөрийг header гэж үзэх
-            headerIdx = 1;
-            bestScore = scoreRow(rows[headerIdx], headerIdx);
-            console.log(`2-р мөрийг header гэж сонголоо (headerIdx=${headerIdx}, score=${bestScore})`);
-          } else {
-            // Хамгийн сүүлчийн fallback: 1-р мөрийг header гэж үзэх (гэхдээ энэ нь ихэвчлэн title мөр байдаг)
-            headerIdx = 0;
-            bestScore = scoreRow(rows[headerIdx], headerIdx);
-            console.warn(`1-р мөрийг header гэж сонголоо (headerIdx=${headerIdx}, score=${bestScore}) - Энэ нь title мөр байж магадгүй!`);
-          }
-        }
-        
-        // Хэрэв headerIdx === 0 бол (title мөр), 3-р мөрийг header гэж үзэх
-        if (headerIdx === 0 && rows.length > 2) {
-          console.warn(`Header мөр 1-р мөрөнд олдлоо, гэхдээ энэ нь title мөр байж магадгүй. 3-р мөрийг header гэж сонгож байна.`);
-          headerIdx = 2;
-          const score3 = scoreRow(rows[2], 2);
-          bestScore = score3 > 0 ? score3 : 100;
-          console.log(`3-р мөрийг header гэж сонголоо (headerIdx=${headerIdx}, score=${bestScore})`);
-        }
 
         console.log(`Header мөр олдлоо: мөр ${headerIdx + 1}, оноо: ${bestScore}`);
         console.log("Header мөрийн утгууд:", rows[headerIdx]);
@@ -1566,13 +1237,6 @@
 
     // Google Sheets дээр хадгалах
     saveToGoogleSheetsBtn.addEventListener("click", async () => {
-      // User role-ийг шалгах
-      const userRole = sessionStorage.getItem("userRole") || "admin";
-      if (userRole === "operator") {
-        showError("❌ Та тавил оруулах эрхгүй байна. Зөвхөн админ user хадгалах боломжтой.");
-        return;
-      }
-      
       if (!googleSheetId) {
         showError("Эхлээд Google Sheets уншуулаарай.");
         return;
@@ -1626,18 +1290,16 @@
           return;
         }
 
-        const tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/spreadsheets',
-          callback: async (response) => {
-            if (response.error) {
-              showError(`OAuth алдаа: ${response.error}`);
-              return;
-            }
-
-            // Access token-ийг тохируулах
-            window.gapi.client.setToken(response);
-
+        // OAuth token шалгах - хэрэв байгаа бол дахин нэвтрэх шаардлагагүй
+        const currentToken = window.gapi.client.getToken();
+        if (!currentToken || !currentToken.access_token) {
+          // Token байхгүй бол л OAuth flow эхлүүлэх
+          setStatus("Google account-аар нэвтрэх шаардлагатай...");
+        }
+        
+        // Хадгалах логикийг функц болгон гаргах (token байгаа эсвэл шинээр авсан үед ашиглах)
+        const performSave = async () => {
+            try {
             // Өөрчлөлтүүд баганын утгуудыг олох
             // Бүх хувилбаруудыг шалгах: "өөрчлөлт", "өөрчлөлтүүд", "Тавил оруулах" гэх мэт
             console.log("Headers шалгалт (хадгалах):", {
@@ -1718,35 +1380,39 @@
               }
               
               if (finalOorchloltColIndex < 0) {
-                showError(`Өөрчлөлтүүд/Тавил оруулах багана олдсонгүй.\n\nHeaders: ${headers.join(", ")}\nViewHeaders: ${viewHeaders.join(", ")}\n\nConsole-оос дэлгэрэнгүй мэдээлэл харах.`);
-                return;
+                // IP sheet-ийн тохиолдолд "Өөрчлөлтүүд" багана шаардлагагүй
+                const selectedSheetName = sheetSelect.value || "";
+                const isIPSheet = /IP/i.test(selectedSheetName);
+                
+                if (!isIPSheet) {
+                  showError(`Өөрчлөлтүүд/Тавил оруулах багана олдсонгүй.\n\nHeaders: ${headers.join(", ")}\nViewHeaders: ${viewHeaders.join(", ")}\n\nConsole-оос дэлгэрэнгүй мэдээлэл харах.`);
+                  return;
+                } else {
+                  console.log("IP sheet байна, 'Өөрчлөлтүүд' багана шаардлагагүй");
+                  // IP sheet-ийн тохиолдолд dummy index ашиглах (хэрэглэхгүй)
+                  finalOorchloltColIndex = -1;
+                }
               }
             }
             
             // finalOorchloltColIndex-ийг ашиглах
             const oorchloltColIndexToUse = finalOorchloltColIndex;
             
-            console.log("Өөрчлөлтүүд багана олдлоо:", {
-              index: oorchloltColIndexToUse,
-              header: headers[oorchloltColIndexToUse],
-              headers,
-              viewHeaders
-            });
+            // IP sheet-ийн тохиолдолд "Өөрчлөлтүүд" багана шаардлагагүй
+            const selectedSheetNameCheck = sheetSelect.value || "";
+            const isIPSheetCheck = /IP/i.test(selectedSheetNameCheck);
+            
+            if (isIPSheetCheck) {
+              console.log("IP sheet байна, 'Өөрчлөлтүүд' багана шаардлагагүй");
+            } else {
+              console.log("Өөрчлөлтүүд багана олдлоо:", {
+                index: oorchloltColIndexToUse,
+                header: oorchloltColIndexToUse >= 0 ? headers[oorchloltColIndexToUse] : "Олдсонгүй",
+                headers,
+                viewHeaders
+              });
+            }
 
-            // Footer мөрүүдийн "өөрчлөлтүүд" баганад утга байгаа эсэхийг шалгах
-            const footerKeywords = ["тавил тавьсан", "албат тоотын", "протоколын дугаар", "он сар өдөр", "инженер"];
-            const footerRowIndices = [];
-            
-            // Footer мөрүүдийг олох
-            sheetData.forEach((row, idx) => {
-              const rowText = Object.values(row).map(v => (v ?? "").toString().trim().toLowerCase()).join(" ");
-              const isFooter = footerKeywords.some(keyword => rowText.includes(keyword));
-              if (isFooter) {
-                footerRowIndices.push(idx);
-              }
-            });
-            
-            // Footer мөрүүдийн "өөрчлөлтүүд" баганад утга байгаа эсэхийг шалгах
             const editableInputs = document.querySelectorAll('.editable-input');
             const inputValues = new Map();
             editableInputs.forEach(input => {
@@ -1759,77 +1425,46 @@
               }
             });
             
-            const missingFooterValues = [];
-            footerRowIndices.forEach(footerIdx => {
-              const row = sheetData[footerIdx];
-              const inputKey = `${row.__rowIndex}_${headers[oorchloltColIndexToUse]}`;
-              const inputValue = inputValues.get(inputKey) || "";
-              
-              // Хэрэв input field-ээс утга байхгүй бол, анхны sheetData-аас шалгах
-              let val = inputValue;
-              if (!val || val.trim() === "") {
-                val = row[headers[oorchloltColIndexToUse]] || "";
-              }
-              
-              // Хэрэв "өөрчлөлтүүд" баганад утга байхгүй бол
-              if (!val || val.toString().trim() === "") {
-                // "Тавилын утга" баганын утгыг fallback гэж ашиглахгүй, учир нь footer мөрүүдэд заавал утга оруулах шаардлагатай
-                const rowText = Object.values(row).map(v => (v ?? "").toString().trim()).join(" ");
-                missingFooterValues.push(`Мөр ${footerIdx + 1}: ${rowText.substring(0, 50)}...`);
-              }
-            });
-            
-            // Хэрэв footer мөрүүдэд утга байхгүй бол алдаа харуулах
-            if (missingFooterValues.length > 0) {
-              showError(`Footer мөрүүдийн "өөрчлөлтүүд" баганад утга оруулаагүй байна:\n\n${missingFooterValues.join('\n')}\n\nЗөвлөмж: Эдгээр мөрүүдийн "өөрчлөлтүүд" баганад утга оруулна уу.`);
-              return;
-            }
+            // Footer мөрүүдийн "Тавил оруулах" баганад хоосон байгаа тохиолдолд хадгалж болохуйц болгох
+            // Validation-ийг устгасан - хоосон байгаа тохиолдолд мөн хадгалж болно
 
             // Sheet name олох - Google Sheets API-аас бодит sheet name авах
-            let sheetName = null;
-            try {
-              // Spreadsheet metadata авах
-              const metadataResponse = await window.gapi.client.sheets.spreadsheets.get({
-                spreadsheetId: googleSheetId
-              });
+            // Одоогийн сонгосон sheet-ийн нэрийг авах
+            const selectedSheetName = sheetSelect.value;
+            if (!selectedSheetName) {
+              showError("Sheet сонгогдоогүй байна.");
+              return;
+            }
+            
+            // Sheet name -> GID mapping-оос одоогийн sheet-ийн GID-ийг олох
+            let sheetName = selectedSheetName;
+            let currentSheetGid = sheetNameToGidMap[selectedSheetName] || googleSheetGid;
+            
+            if (sheetNameToGidMap[selectedSheetName]) {
+              console.log(`Сонгосон sheet: "${selectedSheetName}" -> GID ${currentSheetGid} (mapping-оос)`);
+            } else {
+              console.warn(`"${selectedSheetName}" sheet mapping-д олдсонгүй, default GID ашиглаж байна: ${currentSheetGid}`);
               
-              if (metadataResponse.status === 200 && metadataResponse.result.sheets) {
-                // GID-аар sheet олох
-                const targetGid = parseInt(googleSheetGid) || 0;
-                console.log("Sheet metadata хайж байна:", {
-                  targetGid,
-                  googleSheetGid,
-                  sheetsCount: metadataResponse.result.sheets.length,
-                  sheetIds: metadataResponse.result.sheets.map(s => ({
-                    id: s.properties.sheetId,
-                    title: s.properties.title
-                  }))
+              // Mapping-д байхгүй бол metadata-аас олох
+              try {
+                const metadataResponse = await window.gapi.client.sheets.spreadsheets.get({
+                  spreadsheetId: googleSheetId
                 });
                 
-                const targetSheet = metadataResponse.result.sheets.find(sheet => {
-                  return sheet.properties.sheetId === targetGid;
-                });
-                
-                if (targetSheet) {
-                  sheetName = targetSheet.properties.title;
-                  console.log(`GID ${targetGid}-аар sheet олдлоо: "${sheetName}" (sheetId: ${targetSheet.properties.sheetId})`);
-                } else {
-                  // GID-аар олдохгүй бол dropdown-оос авах
-                  sheetName = sheetSelect.value;
-                  console.warn(`GID ${targetGid}-аар sheet олдсонгүй, dropdown-оос ашиглаж байна: "${sheetName}"`);
-                  console.warn("Боломжтой sheet-үүд:", metadataResponse.result.sheets.map(s => ({
-                    id: s.properties.sheetId,
-                    title: s.properties.title
-                  })));
+                if (metadataResponse.status === 200 && metadataResponse.result.sheets) {
+                  const targetSheet = metadataResponse.result.sheets.find(sheet => {
+                    return sheet.properties.title === selectedSheetName;
+                  });
+                  
+                  if (targetSheet) {
+                    currentSheetGid = targetSheet.properties.sheetId.toString();
+                    sheetNameToGidMap[selectedSheetName] = currentSheetGid; // Mapping-д хадгалах
+                    console.log(`Сонгосон sheet metadata-аас олдлоо: "${sheetName}" (GID: ${currentSheetGid})`);
+                  }
                 }
-              } else {
-                // Metadata авахгүй бол dropdown-оос авах
-                sheetName = sheetSelect.value;
-                console.warn("Spreadsheet metadata авахгүй, dropdown-оос ашиглаж байна:", sheetName);
+              } catch (metadataErr) {
+                console.warn("Spreadsheet metadata авахад алдаа гарлаа:", metadataErr);
               }
-            } catch (metadataErr) {
-              console.warn("Spreadsheet metadata авахад алдаа гарлаа, dropdown-оос ашиглаж байна:", metadataErr);
-              sheetName = sheetSelect.value;
             }
             
             // Sheet name байхгүй бол fallback (зөвхөн API-аас олдохгүй тохиолдолд)
@@ -1932,64 +1567,83 @@
               }
               
               if (tavlynUtgaColIndex < 0) {
-                console.warn("'Тавилын утга' багана олдсонгүй! Хадгалах логик зөв ажиллахгүй байж магадгүй.");
+                // IP sheet-ийн тохиолдолд "Тавилын утга" багана шаардлагагүй
+                // Sheet-ийн нэрэнд "IP" байгаа эсэхийг шалгах
+                const sheetNameForCheck = sheetSelect.value || "";
+                const isIPSheetForWarning = /IP/i.test(sheetNameForCheck);
+                if (!isIPSheetForWarning) {
+                  console.warn("'Тавилын утга' багана олдсонгүй! Хадгалах логик зөв ажиллахгүй байж магадгүй.");
+                }
               }
             }
+            
+            // Sheet-ийн нэрэнд "IP" байгаа эсэхийг шалгах (selectedSheetName дээрхээс ашиглана)
+            const isIPSheet = /IP/i.test(selectedSheetName);
             
             // Versioning систем: "Өөрчлөлт 1", "Өөрчлөлт 2" гэх мэт багана үүсгэх
-            // Эхлээд одоогийн "Өөрчлөлт" багануудыг олох
-            const existingOorchloltCols = headers
-              .map((h, idx) => ({ name: h, index: idx }))
-              .filter(({ name }) => /^өөрчлөлт\s*\d*$/i.test(name.trim()));
-            
-            // Дараагийн version дугаарыг олох
-            let nextVersion = 1;
-            if (existingOorchloltCols.length > 0) {
-              const versionNumbers = existingOorchloltCols
-                .map(({ name }) => {
-                  const match = name.match(/\d+/);
-                  return match ? parseInt(match[0]) : 0;
-                })
-                .filter(n => n > 0);
-              if (versionNumbers.length > 0) {
-                nextVersion = Math.max(...versionNumbers) + 1;
+            // Гэхдээ IP sheet бол versioning хийхгүй
+            let newOorchloltColName = null;
+            if (!isIPSheet) {
+              // Эхлээд одоогийн "Өөрчлөлт" багануудыг олох
+              const existingOorchloltCols = headers
+                .map((h, idx) => ({ name: h, index: idx }))
+                .filter(({ name }) => /^өөрчлөлт\s*\d*$/i.test(name.trim()));
+              
+              // Дараагийн version дугаарыг олох
+              let nextVersion = 1;
+              if (existingOorchloltCols.length > 0) {
+                const versionNumbers = existingOorchloltCols
+                  .map(({ name }) => {
+                    const match = name.match(/\d+/);
+                    return match ? parseInt(match[0]) : 0;
+                  })
+                  .filter(n => n > 0);
+                if (versionNumbers.length > 0) {
+                  nextVersion = Math.max(...versionNumbers) + 1;
+                }
               }
+              
+              newOorchloltColName = `Өөрчлөлт ${nextVersion}`;
+              console.log("Versioning:", {
+                existingOorchloltCols: existingOorchloltCols.map(c => c.name),
+                nextVersion,
+                newOorchloltColName
+              });
+            } else {
+              console.log("IP sheet байна, versioning хийхгүй");
             }
             
-            const newOorchloltColName = `Өөрчлөлт ${nextVersion}`;
-            console.log("Versioning:", {
-              existingOorchloltCols: existingOorchloltCols.map(c => c.name),
-              nextVersion,
-              newOorchloltColName
-            });
-            
             // Утгуудыг бэлтгэх - "Тавил оруулах" баганад утга байгаа нүднүүдэд шинэ version ашиглах
-            // Эхлээд DOM-оос бүх input field-үүдийн утгыг авах
-            const allInputs = document.querySelectorAll('input.editable-input[data-row][data-field]');
-            console.log("DOM-оос input field-үүдийг олж байна:", {
-              inputsCount: allInputs.length,
-              oorchloltColIndexToUse,
-              oorchloltHeaderName: headers[oorchloltColIndexToUse]
-            });
+            // IP sheet биш бол энэ логикийг ашиглах
+            if (!isIPSheet) {
+              // Эхлээд DOM-оос бүх input field-үүдийн утгыг авах
+              const allInputs = document.querySelectorAll('input.editable-input[data-row][data-field]');
+              console.log("DOM-оос input field-үүдийг олж байна:", {
+                inputsCount: allInputs.length,
+                oorchloltColIndexToUse,
+                oorchloltHeaderName: oorchloltColIndexToUse >= 0 ? headers[oorchloltColIndexToUse] : "N/A"
+              });
+              
+              // DOM-оос утгуудыг авах
+              allInputs.forEach(input => {
+                const rowIndex = parseInt(input.getAttribute('data-row'));
+                const field = input.getAttribute('data-field');
+                const value = input.value.trim();
+                if (rowIndex !== null && field) {
+                  const key = `${rowIndex}_${field}`;
+                  inputValues.set(key, value);
+                  console.log("Input value хадгалж байна:", { key, value, rowIndex, field });
+                }
+              });
+              
+              console.log("InputValues Map:", {
+                size: inputValues.size,
+                entries: Array.from(inputValues.entries()).slice(0, 5)
+              });
+            }
             
-            // DOM-оос утгуудыг авах
-            allInputs.forEach(input => {
-              const rowIndex = parseInt(input.getAttribute('data-row'));
-              const field = input.getAttribute('data-field');
-              const value = input.value.trim();
-              if (rowIndex !== null && field) {
-                const key = `${rowIndex}_${field}`;
-                inputValues.set(key, value);
-                console.log("Input value хадгалж байна:", { key, value, rowIndex, field });
-              }
-            });
-            
-            console.log("InputValues Map:", {
-              size: inputValues.size,
-              entries: Array.from(inputValues.entries()).slice(0, 5)
-            });
-            
-            const tavilOruulahValues = sheetData.map((row, idx) => {
+            // IP sheet биш бол "Тавил оруулах" утгуудыг бэлтгэх
+            const tavilOruulahValues = !isIPSheet && oorchloltColIndexToUse >= 0 ? sheetData.map((row, idx) => {
               // Эхлээд editable input field-ээс утга авах
               const inputKey = `${row.__rowIndex}_${headers[oorchloltColIndexToUse]}`;
               let tavilOruulahVal = inputValues.get(inputKey) || "";
@@ -2028,7 +1682,7 @@
               }
               
               return tavilOruulahVal;
-            });
+            }) : [];
             
             console.log("Тавил оруулах утгууд:", {
               count: tavilOruulahValues.length,
@@ -2114,11 +1768,11 @@
                 tavlynUtgaValuesCount: tavlynUtgaValues.length
               });
               
-              // 1. "Тавилын утга" баганыг шинэчлэх
+              // 1. IP sheet биш бол "Тавилын утга" баганыг шинэчлэх
               let totalUpdatedCells = 0;
               let totalUpdatedRows = 0;
               
-              if (tavlynUtgaColIndex >= 0) {
+              if (!isIPSheet && tavlynUtgaColIndex >= 0) {
                 const tavlynUtgaColLetter = getColumnLetter(tavlynUtgaColIndex);
                 const tavlynUtgaRange = `${escapedSheetName}!${tavlynUtgaColLetter}${startRow}:${tavlynUtgaColLetter}${endRow}`;
                 const tavlynUtgaUpdateValues = tavlynUtgaValues.map(v => [v]);
@@ -2155,145 +1809,312 @@
                 } catch (tavlynUtgaErr) {
                   console.error("❌ Тавилын утга багана шинэчлэхэд алдаа (catch):", tavlynUtgaErr);
                 }
+              } else if (isIPSheet) {
+                console.log("IP sheet байна, 'Тавилын утга' баганыг шинэчлэхгүй (зөвхөн өөрчлөсөн нүднүүдэд л хадгалах)");
               } else {
                 console.warn("⚠️ 'Тавилын утга' багана олдсонгүй, шинэчлэхгүй байна!");
               }
               
-              // 2. "Өөрчлөлт N" багана нэмэх (эсвэл шинэчлэх)
-              // Эхлээд header мөрөнд "Өөрчлөлт N" багана байгаа эсэхийг шалгах
-              const headerRange = `${escapedSheetName}!${getColumnLetter(headers.length)}${headerRowIndex}:${getColumnLetter(headers.length + 10)}${headerRowIndex}`;
-              
-              // Header мөрийг унших
-              const headerResponse = await window.gapi.client.sheets.spreadsheets.values.get({
-                spreadsheetId: googleSheetId,
-                range: `${escapedSheetName}!${headerRowIndex}:${headerRowIndex}`
-              });
-              
-              let headerRow = [];
-              if (headerResponse && headerResponse.status === 200 && headerResponse.result.values) {
-                headerRow = headerResponse.result.values[0] || [];
-              }
-              
-              // Бүх "Өөрчлөлт N" багануудыг олох (headerRow-оос)
-              const allOorchloltCols = headerRow
-                .map((h, idx) => ({ name: h, index: idx }))
-                .filter(({ name }) => name && /^өөрчлөлт\s+\d+$/i.test(name.toString().trim()));
-              
-              console.log("Бүх 'Өөрчлөлт N' баганууд:", allOorchloltCols);
-              
-              // Хамгийн сүүлийн "Өөрчлөлт N" баганыг олох
-              let lastOorchloltColIndex = -1;
-              if (allOorchloltCols.length > 0) {
-                // Version дугаараар эрэмбэлэх
-                const sortedCols = allOorchloltCols.sort((a, b) => {
-                  const aMatch = a.name.toString().match(/\d+/);
-                  const bMatch = b.name.toString().match(/\d+/);
-                  const aNum = aMatch ? parseInt(aMatch[0]) : 0;
-                  const bNum = bMatch ? parseInt(bMatch[0]) : 0;
-                  return aNum - bNum;
+              // 2. IP sheet биш бол "Өөрчлөлт N" багана нэмэх (эсвэл шинэчлэх)
+              if (!isIPSheet && newOorchloltColName) {
+                // Эхлээд header мөрөнд "Өөрчлөлт N" багана байгаа эсэхийг шалгах
+                const headerRange = `${escapedSheetName}!${getColumnLetter(headers.length)}${headerRowIndex}:${getColumnLetter(headers.length + 10)}${headerRowIndex}`;
+                
+                // Header мөрийг унших (одоогийн сонгосон sheet-аас)
+                const headerResponse = await window.gapi.client.sheets.spreadsheets.values.get({
+                  spreadsheetId: googleSheetId,
+                  range: `${escapedSheetName}!${headerRowIndex}:${headerRowIndex}`
                 });
-                lastOorchloltColIndex = sortedCols[sortedCols.length - 1].index;
-                console.log("Хамгийн сүүлийн 'Өөрчлөлт N' багана:", {
-                  index: lastOorchloltColIndex,
-                  name: headerRow[lastOorchloltColIndex]
-                });
-              }
-              
-              // Шинэ "Өөрчлөлт N" багана үүсгэх
-              let oorchloltColIndexInSheet = -1;
-              
-              // Хэрэв "Өөрчлөлт N" багана байгаа бол, хамгийн сүүлийнх нь дараа нэмэх
-              // Хэрэв байхгүй бол, headers.length байрлалд нэмэх
-              const insertColumnIndex = lastOorchloltColIndex >= 0 
-                ? lastOorchloltColIndex + 1 
-                : headers.length;
-              
-              console.log("Шинэ багана нэмэх байрлал:", {
-                insertColumnIndex,
-                lastOorchloltColIndex,
-                headersLength: headers.length,
-                newOorchloltColName
-              });
-              
-              // Багана нэмэх (insert column)
-              const insertColumnRequest = {
-                insertDimension: {
-                  range: {
-                    sheetId: parseInt(googleSheetGid) || 0,
-                    dimension: "COLUMNS",
-                    startIndex: insertColumnIndex,
-                    endIndex: insertColumnIndex + 1
-                  },
-                  inheritFromBefore: false
+                
+                let headerRow = [];
+                if (headerResponse && headerResponse.status === 200 && headerResponse.result.values) {
+                  headerRow = headerResponse.result.values[0] || [];
                 }
-              };
-              
-              const batchUpdateResponse = await window.gapi.client.sheets.spreadsheets.batchUpdate({
-                spreadsheetId: googleSheetId,
-                resource: {
-                  requests: [insertColumnRequest]
+                
+                // Бүх "Өөрчлөлт N" багануудыг олох (headerRow-оос)
+                const allOorchloltCols = headerRow
+                  .map((h, idx) => ({ name: h, index: idx }))
+                  .filter(({ name }) => name && /^өөрчлөлт\s+\d+$/i.test(name.toString().trim()));
+                
+                console.log("Бүх 'Өөрчлөлт N' баганууд:", allOorchloltCols);
+                
+                // Хамгийн сүүлийн "Өөрчлөлт N" баганыг олох
+                let lastOorchloltColIndex = -1;
+                if (allOorchloltCols.length > 0) {
+                  // Version дугаараар эрэмбэлэх
+                  const sortedCols = allOorchloltCols.sort((a, b) => {
+                    const aMatch = a.name.toString().match(/\d+/);
+                    const bMatch = b.name.toString().match(/\d+/);
+                    const aNum = aMatch ? parseInt(aMatch[0]) : 0;
+                    const bNum = bMatch ? parseInt(bMatch[0]) : 0;
+                    return aNum - bNum;
+                  });
+                  lastOorchloltColIndex = sortedCols[sortedCols.length - 1].index;
+                  console.log("Хамгийн сүүлийн 'Өөрчлөлт N' багана:", {
+                    index: lastOorchloltColIndex,
+                    name: headerRow[lastOorchloltColIndex]
+                  });
                 }
-              });
-              
-              if (batchUpdateResponse && batchUpdateResponse.status === 200) {
-                console.log("✅ Шинэ багана нэмэгдлээ:", {
+                
+                // Шинэ "Өөрчлөлт N" багана үүсгэх
+                let oorchloltColIndexInSheet = -1;
+                
+                // Хэрэв "Өөрчлөлт N" багана байгаа бол, хамгийн сүүлийнх нь дараа нэмэх
+                // Хэрэв байхгүй бол, headers.length байрлалд нэмэх
+                const insertColumnIndex = lastOorchloltColIndex >= 0 
+                  ? lastOorchloltColIndex + 1 
+                  : headers.length;
+                
+                console.log("Шинэ багана нэмэх байрлал:", {
                   insertColumnIndex,
+                  lastOorchloltColIndex,
+                  headersLength: headers.length,
                   newOorchloltColName
                 });
-                oorchloltColIndexInSheet = insertColumnIndex;
-              } else {
-                console.error("❌ Багана нэмэхэд алдаа:", batchUpdateResponse);
-                // Fallback: headers.length байрлалд нэмэх
-                oorchloltColIndexInSheet = headers.length;
-              }
-              
-              // Header мөрөнд "Өөрчлөлт N" нэмэх/шинэчлэх
-              const newHeaderColLetter = getColumnLetter(oorchloltColIndexInSheet);
-              const newHeaderRange = `${escapedSheetName}!${newHeaderColLetter}${headerRowIndex}`;
-              
-              console.log("Header мөрөнд 'Өөрчлөлт N' нэмэж байна:", {
-                range: newHeaderRange,
-                colIndex: oorchloltColIndexInSheet,
-                colLetter: newHeaderColLetter,
-                headerName: newOorchloltColName
-              });
-              
-              await window.gapi.client.sheets.spreadsheets.values.update({
-                spreadsheetId: googleSheetId,
-                range: newHeaderRange,
-                valueInputOption: 'USER_ENTERED',
-                resource: {
-                  values: [[newOorchloltColName]]
+                
+                // Багана нэмэх (insert column)
+                const insertColumnRequest = {
+                  insertDimension: {
+                    range: {
+                      sheetId: parseInt(currentSheetGid) || 0,
+                      dimension: "COLUMNS",
+                      startIndex: insertColumnIndex,
+                      endIndex: insertColumnIndex + 1
+                    },
+                    inheritFromBefore: false
+                  }
+                };
+                
+                const batchUpdateResponse = await window.gapi.client.sheets.spreadsheets.batchUpdate({
+                  spreadsheetId: googleSheetId,
+                  resource: {
+                    requests: [insertColumnRequest]
+                  }
+                });
+                
+                if (batchUpdateResponse && batchUpdateResponse.status === 200) {
+                  console.log("✅ Шинэ багана нэмэгдлээ:", {
+                    insertColumnIndex,
+                    newOorchloltColName
+                  });
+                  oorchloltColIndexInSheet = insertColumnIndex;
+                } else {
+                  console.error("❌ Багана нэмэхэд алдаа:", batchUpdateResponse);
+                  // Fallback: headers.length байрлалд нэмэх
+                  oorchloltColIndexInSheet = headers.length;
                 }
-              });
-              
-              // "Өөрчлөлт N" баганын утгуудыг хадгалах
-              const oorchloltRange = `${escapedSheetName}!${newHeaderColLetter}${startRow}:${newHeaderColLetter}${endRow}`;
-              const oorchloltUpdateValues = oorchloltValues.map(v => [v]);
-              
-              console.log("Өөрчлөлт N баганыг хадгалах:", {
-                range: oorchloltRange,
-                colIndex: oorchloltColIndexInSheet,
-                colLetter: newHeaderColLetter,
-                valuesCount: oorchloltUpdateValues.length,
-                firstFewValues: oorchloltUpdateValues.slice(0, 5),
-                oorchloltValuesFirstFew: oorchloltValues.slice(0, 5),
-                tavilOruulahValuesFirstFew: tavilOruulahValues.slice(0, 5)
-              });
-              
-              const oorchloltResponse = await window.gapi.client.sheets.spreadsheets.values.update({
-                spreadsheetId: googleSheetId,
-                range: oorchloltRange,
-                valueInputOption: 'USER_ENTERED',
-                resource: {
-                  values: oorchloltUpdateValues
+                
+                // Header мөрөнд "Өөрчлөлт N" нэмэх/шинэчлэх
+                const newHeaderColLetter = getColumnLetter(oorchloltColIndexInSheet);
+                const newHeaderRange = `${escapedSheetName}!${newHeaderColLetter}${headerRowIndex}`;
+                
+                console.log("Header мөрөнд 'Өөрчлөлт N' нэмэж байна:", {
+                  range: newHeaderRange,
+                  colIndex: oorchloltColIndexInSheet,
+                  colLetter: newHeaderColLetter,
+                  headerName: newOorchloltColName
+                });
+                
+                await window.gapi.client.sheets.spreadsheets.values.update({
+                  spreadsheetId: googleSheetId,
+                  range: newHeaderRange,
+                  valueInputOption: 'USER_ENTERED',
+                  resource: {
+                    values: [[newOorchloltColName]]
+                  }
+                });
+                
+                // "Өөрчлөлт N" баганын утгуудыг хадгалах
+                const oorchloltRange = `${escapedSheetName}!${newHeaderColLetter}${startRow}:${newHeaderColLetter}${endRow}`;
+                const oorchloltUpdateValues = oorchloltValues.map(v => [v]);
+                
+                console.log("Өөрчлөлт N баганыг хадгалах:", {
+                  range: oorchloltRange,
+                  colIndex: oorchloltColIndexInSheet,
+                  colLetter: newHeaderColLetter,
+                  valuesCount: oorchloltUpdateValues.length,
+                  firstFewValues: oorchloltUpdateValues.slice(0, 5),
+                  oorchloltValuesFirstFew: oorchloltValues.slice(0, 5),
+                  tavilOruulahValuesFirstFew: tavilOruulahValues.slice(0, 5)
+                });
+                
+                const oorchloltResponse = await window.gapi.client.sheets.spreadsheets.values.update({
+                  spreadsheetId: googleSheetId,
+                  range: oorchloltRange,
+                  valueInputOption: 'USER_ENTERED',
+                  resource: {
+                    values: oorchloltUpdateValues
+                  }
+                });
+                
+                if (oorchloltResponse && oorchloltResponse.status === 200) {
+                  totalUpdatedCells += oorchloltResponse.result?.updatedCells || 0;
+                  totalUpdatedRows += oorchloltResponse.result?.updatedRows || 0;
+                  console.log("Өөрчлөлт N багана хадгалагдлаа:", oorchloltResponse.result);
                 }
-              });
-              
-              if (oorchloltResponse && oorchloltResponse.status === 200) {
-                totalUpdatedCells += oorchloltResponse.result?.updatedCells || 0;
-                totalUpdatedRows += oorchloltResponse.result?.updatedRows || 0;
-                console.log("Өөрчлөлт N багана хадгалагдлаа:", oorchloltResponse.result);
+              } else if (isIPSheet) {
+                // IP sheet: зөвхөн өөрчлөсөн нүднүүдэд л хадгалах
+                console.log("IP sheet байна, зөвхөн өөрчлөсөн нүднүүдэд л хадгалах");
+                
+                // Бүх editable input field-үүдийн утгыг авах
+                const allEditableInputs = document.querySelectorAll('input.editable-input[data-row][data-field]');
+                const changedCells = [];
+                
+                console.log("IP sheet хадгалах эхлэл:", {
+                  allEditableInputsCount: allEditableInputs.length,
+                  sheetDataCount: sheetData.length,
+                  headers: headers
+                });
+                
+                allEditableInputs.forEach((input, inputIdx) => {
+                  const rowIndex = parseInt(input.getAttribute('data-row'));
+                  const field = input.getAttribute('data-field');
+                  const newValue = input.value;
+                  
+                  // Анхны утгыг data-initial-value attribute-оос олох (илүү найдвартай)
+                  let originalValue = input.getAttribute('data-initial-value');
+                  if (originalValue === null || originalValue === undefined) {
+                    // Fallback: sheetData-аас олох
+                    const row = sheetData.find(r => r.__rowIndex === rowIndex);
+                    if (row) {
+                      originalValue = row[field];
+                      if (originalValue === null || originalValue === undefined) {
+                        originalValue = "";
+                      } else {
+                        originalValue = String(originalValue);
+                      }
+                    } else {
+                      originalValue = "";
+                    }
+                  } else {
+                    originalValue = String(originalValue);
+                  }
+                  
+                  // Шинэ утгыг string болгох
+                  const newValueStr = String(newValue || "");
+                  
+                  // Debug: эхний хэдэн input-ийг console-д хэвлэх
+                  if (inputIdx < 5) {
+                    console.log(`Input ${inputIdx}: Row ${rowIndex}, Field "${field}", Original: "${originalValue}", New: "${newValueStr}", Same: ${newValueStr === originalValue}`);
+                  }
+                  
+                  // Утга өөрчлөгдсөн эсэхийг шалгах
+                  if (newValueStr !== originalValue) {
+                    // Баганын индексийг олох
+                    const colIndex = headers.findIndex(h => h === field);
+                    console.log(`Өөрчлөлт илрэлээ: Row ${rowIndex}, Field "${field}", Col ${colIndex}, "${originalValue}" -> "${newValueStr}"`);
+                    
+                    if (colIndex >= 0) {
+                      // Эхний 3 баганаас бусад багануудыг хадгалах
+                      if (colIndex >= 3) {
+                        changedCells.push({
+                          rowIndex: rowIndex,
+                          colIndex: colIndex,
+                          field: field,
+                          newValue: newValueStr,
+                          originalValue: originalValue
+                        });
+                        console.log(`✅ Өөрчлөлт нэмэгдлээ: Row ${rowIndex}, Field "${field}", "${originalValue}" -> "${newValueStr}"`);
+                      } else {
+                        console.log(`⚠️ Эхний 3 багана (Col ${colIndex}), хадгалахгүй`);
+                      }
+                    } else {
+                      console.log(`❌ Багана олдсонгүй: Field "${field}"`);
+                    }
+                  }
+                });
+                
+                console.log("Өөрчлөгдсөн нүднүүд:", changedCells);
+                
+                // Өөрчлөгдсөн нүднүүдэд л хадгалах
+                if (changedCells.length > 0) {
+                  // Баганаар бүлэглэх
+                  const cellsByColumn = {};
+                  changedCells.forEach(cell => {
+                    if (!cellsByColumn[cell.colIndex]) {
+                      cellsByColumn[cell.colIndex] = [];
+                    }
+                    cellsByColumn[cell.colIndex].push(cell);
+                  });
+                  
+                  // Баганаар бүлэглэх бөгөөд мөрөөр эрэмблэх
+                  for (const [colIndex, cells] of Object.entries(cellsByColumn)) {
+                    const colIdx = parseInt(colIndex);
+                    const colLetter = getColumnLetter(colIdx);
+                    
+                    // Нүднүүдийг мөрөөр эрэмблэх
+                    const sortedCells = cells.sort((a, b) => {
+                      const aRowIdx = sheetData.findIndex(r => r.__rowIndex === a.rowIndex);
+                      const bRowIdx = sheetData.findIndex(r => r.__rowIndex === b.rowIndex);
+                      return aRowIdx - bRowIdx;
+                    });
+                    
+                    // Мөрүүдийг олох
+                    const rows = sortedCells.map(cell => {
+                      const rowIdx = sheetData.findIndex(r => r.__rowIndex === cell.rowIndex);
+                      return {
+                        googleSheetRow: startRow + rowIdx,
+                        value: cell.newValue,
+                        originalValue: cell.originalValue
+                      };
+                    });
+                    
+                    console.log(`Багана ${colLetter} (${colIdx}) хадгалах:`, {
+                      cellsCount: rows.length,
+                      rows: rows.map(r => `row ${r.googleSheetRow}: "${r.originalValue}" -> "${r.value}"`)
+                    });
+                    
+                    // values.update ашиглах (илүү хялбар)
+                    const rangeValues = rows.map(r => [r.value]);
+                    const range = `${escapedSheetName}!${colLetter}${rows[0].googleSheetRow}:${colLetter}${rows[rows.length - 1].googleSheetRow}`;
+                    
+                    try {
+                      const updateResponse = await window.gapi.client.sheets.spreadsheets.values.update({
+                        spreadsheetId: googleSheetId,
+                        range: range,
+                        valueInputOption: 'USER_ENTERED',
+                        resource: {
+                          values: rangeValues
+                        }
+                      });
+                      
+                      if (updateResponse && updateResponse.status === 200) {
+                        totalUpdatedCells += updateResponse.result?.updatedCells || rows.length;
+                        totalUpdatedRows += updateResponse.result?.updatedRows || new Set(rows.map(r => r.googleSheetRow)).size;
+                        console.log(`✅ Багана ${colLetter} (${colIdx}) хадгалагдлаа: ${rows.length} нүд, range: ${range}`);
+                      } else {
+                        console.error(`❌ Багана ${colLetter} хадгалахад алдаа:`, updateResponse);
+                      }
+                    } catch (updateErr) {
+                      console.error(`❌ Багана ${colLetter} хадгалахад алдаа (catch):`, updateErr);
+                      // Fallback: нүд бүрийг тусад нь хадгалах
+                      for (const row of rows) {
+                        try {
+                          const singleCellRange = `${escapedSheetName}!${colLetter}${row.googleSheetRow}`;
+                          const singleUpdateResponse = await window.gapi.client.sheets.spreadsheets.values.update({
+                            spreadsheetId: googleSheetId,
+                            range: singleCellRange,
+                            valueInputOption: 'USER_ENTERED',
+                            resource: {
+                              values: [[row.value]]
+                            }
+                          });
+                          
+                          if (singleUpdateResponse && singleUpdateResponse.status === 200) {
+                            totalUpdatedCells += 1;
+                            console.log(`✅ Нүд ${singleCellRange} хадгалагдлаа: "${row.value}"`);
+                          }
+                        } catch (singleErr) {
+                          console.error(`❌ Нүд ${colLetter}${row.googleSheetRow} хадгалахад алдаа:`, singleErr);
+                        }
+                      }
+                    }
+                  }
+                } else {
+                  console.log("Өөрчлөгдсөн нүд олдсонгүй");
+                  setStatus("⚠️ Өөрчлөлт оруулаагүй байна. Хадгалах шаардлагагүй.");
+                  return;
+                }
               }
               
               const updateResponse = {
@@ -2306,6 +2127,11 @@
               };
 
               console.log("Google Sheets update response:", updateResponse);
+              console.log("IP sheet хадгалах үр дүн:", {
+                totalUpdatedCells,
+                totalUpdatedRows,
+                isIPSheet: true
+              });
               
               // Response-ийг нарийвчлан шалгах
               if (updateResponse && updateResponse.status === 200) {
@@ -2318,16 +2144,31 @@
                   updatedCells,
                   updatedRows,
                   updatedColumns,
-                  range: range
+                  isIPSheet: isIPSheet
                 });
                 
                 // Амжилттай мэдээлэл харуулах - товч, ойлгомжтой
                 setStatus(`✅ АМЖИЛТТАЙ ХАДГАЛАГДЛАА!\n\nХадгалсан: ${updatedRows} мөр, ${updatedCells} нүд\n\nGoogle Sheets-ээс автоматаар дахин уншиж байна...`);
                 
-                // Автоматаар Google Sheets-ээс дахин унших
+                // Автоматаар Google Sheets-ээс дахин унших (одоогийн sheet-ийг хадгалж)
+                const currentSheetName = sheetSelect.value; // Одоогийн сонгосон sheet-ийг хадгалах
                 setTimeout(async () => {
                   try {
                     await loadGoogleSheets();
+                    // Одоогийн сонгосон sheet-ийг дахин сонгох
+                    if (currentSheetName && sheetSelect) {
+                      // Sheet dropdown-ийг бэлэн болоход хүлээх
+                      setTimeout(() => {
+                        const optionExists = Array.from(sheetSelect.options).some(opt => opt.value === currentSheetName);
+                        if (optionExists) {
+                          sheetSelect.value = currentSheetName;
+                          loadSheet(currentSheetName);
+                          console.log(`✅ Sheet сэргээлээ: "${currentSheetName}"`);
+                        } else {
+                          console.warn(`Sheet "${currentSheetName}" олдсонгүй, эхний sheet ашиглаж байна`);
+                        }
+                      }, 100);
+                    }
                     setStatus(`✅ АМЖИЛТТАЙ ХАДГАЛАГДЛАА!\n\nХадгалсан: ${updatedRows} мөр, ${updatedCells} нүд\n\n✅ Google Sheets-ээс дахин уншлаа.`);
                   } catch (refreshErr) {
                     console.error("Автоматаар refresh хийхэд алдаа:", refreshErr);
@@ -2360,7 +2201,7 @@
               
               if (errorStatus === 403 || (updateErr.result && updateErr.result.error && updateErr.result.error.code === 403)) {
                 // 403 Forbidden алдаа
-                showError(`❌ АМЖИЛТГҮЙ: ЭРХ ХҮРЭХГҮЙ\n\nШийдэл: Google Sheets → Share → "Editor" сонгох`);
+                showError(`❌ АМЖИЛТГҮЙ: ЭРХ ХҮРЭХГҮЙ\n\nШийдэл:\n1. Google Sheets → Share → Restricted байгаа эсэхийг шалгах\n2. Нэвтэрсэн email-ийг Share дээр нэмэх (Share → Email нэмэх → "Editor" эрх өгөх)\n3. Хэрэв Restricted биш бол Share → "Editor" эрх өгөх`);
               } else if (errorStatus === 400 || (updateErr.result && updateErr.result.error && updateErr.result.error.code === 400)) {
                 // 400 Bad Request алдаа - range эсвэл утга буруу байна
                 console.error("400 алдааны дэлгэрэнгүй:", {
@@ -2384,22 +2225,63 @@
                 showError(`❌ АМЖИЛТГҮЙ БОЛЛОО\n\nАлдаа: ${errorMessage}\n\nЗөвлөмж: Интернэт холболт, Google Sheets шалгах`);
               }
             }
+            } catch (performSaveErr) {
+              console.error("performSave алдаа:", performSaveErr);
+              showError(`Google Sheets хадгалахад алдаа гарлаа:\n\n${performSaveErr?.message || performSaveErr}`);
+            }
+        };
+
+        const tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: 'https://www.googleapis.com/auth/spreadsheets',
+          callback: async (response) => {
+            if (response.error) {
+              showError(`OAuth алдаа: ${response.error}`);
+              return;
+            }
+
+            // Access token-ийг тохируулах
+            window.gapi.client.setToken(response);
+            console.log("OAuth token авлаа (хадгалах)");
+            
+            // Хадгалах логикийг дуудах
+            await performSave();
           }
         });
 
-        // Token авах
-        tokenClient.requestAccessToken({ prompt: 'consent' });
+        // Token авах - хэрэв token байгаа бол дахин нэвтрэх шаардлагагүй
+        if (!currentToken || !currentToken.access_token) {
+          // Token байхгүй бол consent асуух
+          // prompt: 'select_account' - account сонгох (1 удаа), дараа нь cookie-д хадгалагдана, илүү хурдан
+          // prompt: 'consent' - баталгаажуулалт дахин асуух (олон цаг авна)
+          // prompt: '' - автоматаар ашиглах (token байгаа бол)
+          tokenClient.requestAccessToken({ prompt: 'select_account' });
+        } else {
+          // Token байгаа бол шууд хадгалах логик руу орно
+          window.gapi.client.setToken(currentToken);
+          console.log("Одоогийн OAuth token ашиглаж байна (дахь удаа нэвтрэх шаардлагагүй)");
+          
+          // Хадгалах логикийг шууд дуудах
+          await performSave();
+        }
       } catch (err) {
         console.error("Google Sheets хадгалах алдаа:", err);
         showError(`Google Sheets хадгалахад алдаа гарлаа:\n\n${err?.message || err}\n\nЗөвлөмж:\n1. Google Cloud Console → API & Services → Credentials → OAuth 2.0 Client ID үүсгэх\n2. Client ID-г оруулах`);
       }
     });
 
-    // Google Sheets URL-аас өгөгдөл унших функц
+    // Google Sheets URL-аас өгөгдөл унших функц (OAuth ашиглах)
     const loadGoogleSheets = async () => {
       const url = googleSheetsUrlInput.value.trim();
       if (!url) {
         showError("Google Sheets URL оруулна уу.");
+        return;
+      }
+
+      // OAuth 2.0 Client ID шалгах
+      const clientId = googleApiKeyInput.value.trim();
+      if (!clientId) {
+        showError("OAuth 2.0 Client ID оруулна уу.");
         return;
       }
 
@@ -2429,182 +2311,251 @@
           googleSheetGid = "0"; // Default GID
         }
 
-        // CORS proxy ашиглах (энгийн fetch CORS асуудалтай байдаг)
-        // Эхлээд хамгийн найдвартай URL-г ашиглах
-        const primaryUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
-        const fallbackUrls = [
-          `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${gid}`,
-          `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`,
-        ];
-        
-        // Эхлээд хамгийн найдвартай proxy-г ашиглах
-        const proxyUrls = [
-          `https://api.allorigins.win/get?url=${encodeURIComponent(primaryUrl)}`,
-          `https://corsproxy.io/?${encodeURIComponent(primaryUrl)}`,
-        ];
-        
-        // Fallback proxy URLs
-        fallbackUrls.forEach(baseUrl => {
-          proxyUrls.push(`https://api.allorigins.win/get?url=${encodeURIComponent(baseUrl)}`);
-          proxyUrls.push(`https://corsproxy.io/?${encodeURIComponent(baseUrl)}`);
-        });
-
-        let csvText = null;
-        let lastError = null;
-
-        // Эхлээд шууд URL-г турших (хурдан)
-        const directUrls = [
-          `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`,
-          `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${gid}`,
-        ];
-        
-        for (const csvUrl of directUrls) {
-          try {
-            setStatus(`Шууд уншиж байна...`);
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3000);
-            
-            const response = await fetch(csvUrl, {
-              mode: 'cors',
-              credentials: 'omit',
-              signal: controller.signal
+        // gapi client идэвхжүүлэх (хэрэв хийгдээгүй бол)
+        if (!window.gapi || !window.gapi.client || !window.gapi.client.sheets) {
+          setStatus("Google API идэвхжүүлж байна...");
+          if (!window.gapi) {
+            throw new Error("Google API library ачаалагдаагүй байна. Интернэт холболт шалгаарай.");
+          }
+          
+          await new Promise((resolve, reject) => {
+            window.gapi.load('client', () => {
+              window.gapi.client.init({
+                'discoveryDocs': ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
+                'clientId': clientId
+              }).then(() => {
+                console.log("Google API client идэвхжүүлэгдлээ");
+                resolve();
+              }).catch(reject);
             });
-            clearTimeout(timeoutId);
-            
-            if (response.ok) {
-              const text = await response.text();
-              // HTML буцааж байгаа эсэхийг шалгах
-              if (text && !text.includes('<!DOCTYPE') && !text.includes('<html') && text.trim().length > 0) {
-                const lines = text.split('\n').filter(l => l.trim().length > 0);
-                if (lines.length > 0 && (lines[0].includes(',') || lines[0].includes(';') || lines[0].includes('\t'))) {
-                  csvText = text;
-                  console.log("Шууд URL-аас CSV текстийг амжилттай авлаа");
-                  break;
-                }
-              }
-            }
-          } catch (err) {
-            if (err.name !== 'AbortError') {
-              console.log(`Шууд URL ажиллахгүй байна:`, err);
-            }
-            continue;
-          }
-        }
-
-        // Хэрэв шууд URL ажиллахгүй бол proxy ашиглах
-        if (!csvText) {
-          for (let i = 0; i < proxyUrls.length; i++) {
-            const proxyUrl = proxyUrls[i];
-            try {
-              setStatus(`Google Sheets уншиж байна... (${i + 1}/${proxyUrls.length})`);
-              
-              // Timeout нэмэх (5 секунд - хурдасгах)
-              const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 5000);
-              
-              const proxyResponse = await fetch(proxyUrl, { signal: controller.signal });
-              clearTimeout(timeoutId);
-              
-              if (proxyResponse.ok) {
-                let text = await proxyResponse.text();
-                
-                // JSON формат эсэхийг шалгах (allorigins.win)
-                if (proxyUrl.includes('allorigins.win')) {
-                  try {
-                    const proxyData = JSON.parse(text);
-                    text = proxyData.contents || text;
-                    console.log("allorigins.win proxy-аас CSV текстийг авлаа");
-                  } catch (e) {
-                    // JSON биш бол шууд text ашиглах
-                    console.log("allorigins.win proxy JSON биш, шууд text ашиглаж байна");
-                  }
-                }
-                
-                // HTML буцааж байгаа эсэхийг шалгах
-                if (text && (text.includes('<!DOCTYPE') || text.includes('<html') || text.includes('Sign in') || text.includes('Access denied'))) {
-                  console.log("HTML буцааж байна, дараагийн URL туршиж үзэх...");
-                  continue;
-                }
-                
-                // CSV текстийг шалгах - зөв CSV формат эсэхийг шалгах
-                if (text && text.trim().length > 0 && !text.includes('<!DOCTYPE')) {
-                  // CSV текстийг шалгах - таслалаар тусгаарлагдсан байх ёстой
-                  const lines = text.split('\n').filter(l => l.trim().length > 0);
-                  if (lines.length > 0) {
-                    const firstLine = lines[0];
-                    console.log("CSV текстийн эхний мөр:", firstLine.substring(0, 200));
-                    console.log("CSV мөрүүдийн тоо:", lines.length);
-                    
-                    // CSV текстийг зөв parse хийх боломжтой эсэхийг шалгах
-                    if (firstLine.includes(',') || firstLine.includes(';') || firstLine.includes('\t')) {
-                      csvText = text;
-                      console.log("CSV текстийг амжилттай авлаа");
-                      break; // Амжилттай уншсан
-                    } else {
-                      console.log("CSV текстийг зөв parse хийх боломжгүй (таслал олдсонгүй), дараагийн URL туршиж үзэх...");
-                    }
-                  } else {
-                    console.log("CSV текст хоосон, дараагийн URL туршиж үзэх...");
-                  }
-                }
-              }
-            } catch (err) {
-              lastError = err;
-              if (err.name !== 'AbortError') {
-                console.log(`Proxy URL ажиллахгүй байна:`, err);
-              }
-              continue;
-            }
-          }
-        }
-
-        if (!csvText || csvText.trim().length === 0 || csvText.includes('<!DOCTYPE')) {
-          throw new Error(`Google Sheets унших боломжгүй. Дараах зүйлсийг шалгаарай:\n1. Файлыг "Anyone with the link can view" гэж тохируулсан эсэх\n2. Интернэт холболт байгаа эсэх\n3. URL зөв эсэх\n\nАлдаа: ${lastError?.message || "Тодорхойгүй алдаа"}`);
-        }
-
-        // CSV текстийг шалгах
-        console.log("CSV текстийн эхний 500 тэмдэгт:", csvText.substring(0, 500));
-        console.log("CSV текстийн урт:", csvText.length);
-        
-        // CSV текстийг Excel workbook болгон хөрвүүлэх
-        try {
-          // CSV текстийг зөв parse хийх - CSV формат нь таслалаар тусгаарлагдсан байна
-          workbook = XLSX.read(csvText, { 
-            type: "string", 
-            raw: false,
-            codepage: 65001, // UTF-8
-            FS: ",", // Field separator (comma)
-            RS: "\n", // Record separator (newline)
-            sheetStubs: false
           });
+        }
+
+        // OAuth token шалгах эсвэл авах (хэрэв login хийсэн бол token байна, цаг алдахгүй)
+        const currentToken = window.gapi.client.getToken();
+        if (!currentToken || !currentToken.access_token) {
+          // Token байхгүй бол хэрэглэгчийг login хийх гэж санаа өгөх (автоматаар popup нээхгүй)
+          setStatus("⚠️ Эхлээд 'Google-д нэвтрэх' товчийг дараарай. Token байхгүй байна.");
+          throw new Error("Token байхгүй. Эхлээд 'Google-д нэвтрэх' товчийг дараарай.");
+        } else {
+          console.log("✅ Token аль хэдийн байна (login хийсэн), цаг алдахгүй шууд уншиж байна");
+        }
+
+        // Google Sheets API-аар өгөгдөл унших
+        setStatus("Google Sheets API-аар өгөгдөл уншиж байна...");
+        
+        // Spreadsheet metadata авах
+        const metadataResponse = await window.gapi.client.sheets.spreadsheets.get({
+          spreadsheetId: sheetId
+        });
+        
+        if (metadataResponse.status !== 200) {
+          throw new Error(`Google Sheets metadata авахад алдаа: ${metadataResponse.statusText}`);
+        }
+
+        const spreadsheet = metadataResponse.result;
+        console.log("Spreadsheet metadata:", spreadsheet);
+
+        if (!spreadsheet.sheets || spreadsheet.sheets.length === 0) {
+          throw new Error("Google Sheets дээр sheet олдсонгүй.");
+        }
+
+        // Бүх sheet-үүдийг унших
+        workbook = {
+          SheetNames: [],
+          Sheets: {}
+        };
+
+        // Бүх sheet-үүдийг унших
+        for (const sheet of spreadsheet.sheets) {
+          const sheetName = sheet.properties.title;
+          const sheetGid = sheet.properties.sheetId;
           
-          console.log("Workbook уншлаа:", workbook);
-          console.log("SheetNames:", workbook.SheetNames);
-          
-          if (workbook.SheetNames.length > 0) {
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const firstSheetData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
-            console.log("Эхний sheet-ийн эхний 5 мөр:", firstSheetData.slice(0, 5));
+          try {
+            setStatus(`"${sheetName}" sheet уншиж байна...`);
+            
+            // Sheet-ийн бүх өгөгдлийг унших (A1:Z1000 хүртэл - их хэмжээний өгөгдөл)
+            const valuesResponse = await window.gapi.client.sheets.spreadsheets.values.get({
+              spreadsheetId: sheetId,
+              range: `${sheetName}!A1:Z1000`
+            });
+
+            if (valuesResponse.status === 200) {
+              const values = valuesResponse.result.values || [];
+              
+              if (values.length > 0) {
+                // XLSX формат болгон хөрвүүлэх
+                const ws = XLSX.utils.aoa_to_sheet(values);
+                workbook.Sheets[sheetName] = ws;
+                workbook.SheetNames.push(sheetName);
+                
+                console.log(`"${sheetName}" sheet уншлаа: ${values.length} мөр`);
+              } else {
+                // Хоосон sheet-ийг мөн нэмэх
+                const ws = XLSX.utils.aoa_to_sheet([[]]);
+                workbook.Sheets[sheetName] = ws;
+                workbook.SheetNames.push(sheetName);
+                console.log(`"${sheetName}" sheet хоосон байна`);
+              }
+            } else {
+              console.warn(`"${sheetName}" sheet унших алдаа: ${valuesResponse.statusText}`);
+              // Алдаа гарсан ч sheet-ийг нэмэх (хоосон)
+              const ws = XLSX.utils.aoa_to_sheet([[]]);
+              workbook.Sheets[sheetName] = ws;
+              workbook.SheetNames.push(sheetName);
+            }
+          } catch (sheetErr) {
+            console.warn(`"${sheetName}" sheet унших алдаа:`, sheetErr);
+            // Алдаа гарсан ч sheet-ийг нэмэх (хоосон)
+            const ws = XLSX.utils.aoa_to_sheet([[]]);
+            workbook.Sheets[sheetName] = ws;
+            workbook.SheetNames.push(sheetName);
           }
-        } catch (parseErr) {
-          console.error("CSV parse алдаа:", parseErr);
-          console.error("CSV текстийн эхний 1000 тэмдэгт:", csvText.substring(0, 1000));
-          throw new Error(`CSV унших алдаа: ${parseErr.message}. CSV текст зөв эсэхийг шалгаарай.`);
+        }
+
+        if (workbook.SheetNames.length === 0) {
+          throw new Error("Ямар ч sheet унших боломжгүй байна.");
+        }
+
+        // Sheet name -> GID mapping үүсгэх
+        sheetNameToGidMap = {};
+        if (spreadsheet.sheets) {
+          spreadsheet.sheets.forEach(sheet => {
+            const sheetName = sheet.properties.title;
+            const sheetGid = sheet.properties.sheetId.toString();
+            sheetNameToGidMap[sheetName] = sheetGid;
+            console.log(`Sheet mapping: "${sheetName}" -> GID ${sheetGid}`);
+          });
         }
         
-        if (!workbook || !workbook.SheetNames || workbook.SheetNames.length === 0) {
-          throw new Error("Google Sheets хоосон эсвэл унших боломжгүй байна.");
+        // GID-аар default sheet-ийг сонгох
+        const targetGid = parseInt(gid) || 0;
+        if (targetGid !== 0) {
+          const targetSheet = spreadsheet.sheets.find(sheet => {
+            return sheet.properties.sheetId === targetGid;
+          });
+          if (targetSheet) {
+            googleSheetGid = targetSheet.properties.sheetId.toString();
+            console.log(`Default sheet: "${targetSheet.properties.title}" (GID: ${googleSheetGid})`);
+          }
+        } else if (spreadsheet.sheets.length > 0) {
+          // GID байхгүй бол эхний sheet-ийг default болгох
+          googleSheetGid = spreadsheet.sheets[0].properties.sheetId.toString();
+          console.log(`Default sheet: "${spreadsheet.sheets[0].properties.title}" (GID: ${googleSheetGid})`);
         }
+        
+        console.log("Workbook уншлаа:", workbook);
+        console.log(`Нийт ${workbook.SheetNames.length} sheet уншлаа:`, workbook.SheetNames);
 
         originalFileName = `Google Sheets - ${sheetId.substring(0, 8)}.xlsx`;
         setStatus(`Амжилттай: Google Sheets уншлаа (${workbook.SheetNames.length} sheet)`);
+        
+        // Одоогийн сонгосон sheet-ийг хадгалах (хэрэв байгаа бол)
+        const currentSheetBeforeRefresh = sheetSelect.value;
         populateSheetDropdown();
+        
+        // Хэрэв refresh хийхээс өмнө sheet сонгосон байсан бол дахин сонгох
+        if (currentSheetBeforeRefresh && Array.from(sheetSelect.options).some(opt => opt.value === currentSheetBeforeRefresh)) {
+          sheetSelect.value = currentSheetBeforeRefresh;
+          loadSheet(currentSheetBeforeRefresh);
+          console.log(`✅ Sheet сэргээлээ: "${currentSheetBeforeRefresh}"`);
+        }
       } catch (err) {
         console.error("Google Sheets унших алдаа:", err);
-        showError(`Google Sheets уншихад алдаа гарлаа:\n\n${err?.message || err}\n\nЗөвлөмж:\n1. Google Sheets → Share → "Anyone with the link" → "Viewer" сонгох\n2. URL зөв эсэхийг шалгах\n3. Интернэт холболт байгаа эсэхийг шалгах`);
+        // Token байхгүй алдаа тохиолдолд хэрэглэгчид мэдээлэл өгөх (popup нээхгүй)
+        if (err.message && (err.message.includes('Token байхгүй') || err.message.includes('OAuth'))) {
+          showError(`⚠️ Token байхгүй байна.\n\nШийдэл:\n1. Эхлээд "Google-д нэвтрэх" товчийг дараарай\n2. Дараа нь "Google Sheets унших" товчийг дараарай\n\n💡 Энэ нь reload хийхэд popup нээгдэхгүй байхын тулд хийгдсэн.`);
+        } else {
+          showError(`Google Sheets уншихад алдаа гарлаа:\n\n${err?.message || err}\n\nЗөвлөмж:\n1. Google Sheets-д хандах эрхтэй эсэхийг шалгах\n2. URL зөв эсэхийг шалгах\n3. Интернэт холболт байгаа эсэхийг шалгах`);
+        }
       }
     };
     
+    // Google-д нэвтрэх товч (token авах)
+    const loginGoogleBtn = document.getElementById("login-google");
+    const loginGoogle = async () => {
+      const clientId = googleApiKeyInput.value.trim();
+      if (!clientId) {
+        showError("OAuth 2.0 Client ID оруулна уу.");
+        return;
+      }
+
+      try {
+        setStatus("Google-д нэвтрэж байна...");
+
+        // File:// protocol-ийг шалгах
+        if (window.location.protocol === 'file:') {
+          showError(`Файлыг шууд нээж байна (file://). Google OAuth 2.0 ажиллахгүй.\n\nЗөвлөмж:\n1. Localhost дээр ажиллуулах:\n   - Terminal/Command Prompt нээх\n   - Энэ folder руу орох\n   - "python -m http.server 8000" эсвэл "npx http-server" гэж бичих\n   - Browser дээр "http://localhost:8000" нээх\n\n2. Эсвэл VS Code Live Server extension ашиглах`);
+          return;
+        }
+
+        // gapi client идэвхжүүлэх (хэрэв хийгдээгүй бол)
+        if (!window.gapi || !window.gapi.client || !window.gapi.client.sheets) {
+          setStatus("Google API идэвхжүүлж байна...");
+          if (!window.gapi) {
+            throw new Error("Google API library ачаалагдаагүй байна. Интернэт холболт шалгаарай.");
+          }
+          
+          await new Promise((resolve, reject) => {
+            window.gapi.load('client', () => {
+              window.gapi.client.init({
+                'discoveryDocs': ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
+                'clientId': clientId
+              }).then(() => {
+                console.log("Google API client идэвхжүүлэгдлээ");
+                resolve();
+              }).catch(reject);
+            });
+          });
+        }
+
+        // OAuth token шалгах
+        const currentToken = window.gapi.client.getToken();
+        if (currentToken && currentToken.access_token) {
+          setStatus("✅ Аль хэдийн нэвтэрсэн байна! Дараагийн уншилт/бичилт хурдан болно.");
+          loginGoogleBtn.textContent = "✅ Нэвтэрсэн";
+          loginGoogleBtn.style.background = "var(--success)";
+          return;
+        }
+
+        // Token авах
+        setStatus("Google account-аар нэвтрэх шаардлагатай...");
+        await new Promise((resolve, reject) => {
+          const tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: 'https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/spreadsheets',
+            callback: (response) => {
+              if (response.error) {
+                reject(new Error(`OAuth алдаа: ${response.error}`));
+                return;
+              }
+              window.gapi.client.setToken(response);
+              console.log("OAuth token авлаа (login)");
+              setStatus("✅ Амжилттай нэвтэрлээ! Одоо уншилт/бичилт хурдан болно.");
+              loginGoogleBtn.textContent = "✅ Нэвтэрсэн";
+              loginGoogleBtn.style.background = "var(--success)";
+              resolve();
+            }
+          });
+          // prompt: 'select_account' - account сонгох (1 удаа), дараа нь cookie-д хадгалагдана, илүү хурдан
+          // prompt: 'consent' - баталгаажуулалт дахин асуух (олон цаг авна)
+          // prompt: '' - автоматаар ашиглах (token байгаа бол)
+          tokenClient.requestAccessToken({ prompt: 'select_account' });
+        });
+      } catch (err) {
+        console.error("Google login алдаа:", err);
+        if (err.message && err.message.includes('OAuth')) {
+          showError(`Google account-аар нэвтрэх алдаа:\n\n${err.message}\n\nЗөвлөмж:\n1. OAuth 2.0 Client ID зөв эсэхийг шалгах\n2. Google Cloud Console дээр redirect URI зөв тохируулсан эсэхийг шалгах`);
+        } else {
+          showError(`Google-д нэвтрэхэд алдаа гарлаа:\n\n${err?.message || err}\n\nЗөвлөмж:\n1. Интернэт холболт шалгах\n2. OAuth 2.0 Client ID зөв эсэхийг шалгах`);
+        }
+        loginGoogleBtn.textContent = "🔐 Google-д нэвтрэх";
+        loginGoogleBtn.style.background = "var(--accent)";
+      }
+    };
+
+    loginGoogleBtn.addEventListener("click", loginGoogle);
+
     // Google Sheets унших товчны event listener
     loadGoogleSheetsBtn.addEventListener("click", loadGoogleSheets);
     
@@ -2617,10 +2568,13 @@
       "Буянт Ухаа": "BUYANTUHAA.pdf"
     };
     
-    // Дэд станц dropdown change event listener (сонгосон дэд станц өөрчлөгдөхөд автоматаар унших)
+    // Дэд станц dropdown change event listener (зөвхөн хэрэглэгч сонгосон үед л автоматаар унших)
+    let lastSelectedUrl = googleSheetsUrlInput.value; // Эхний утгыг хадгалах
     googleSheetsUrlInput.addEventListener("change", () => {
-      // Dropdown сонгосон дэд станц өөрчлөгдөхөд автоматаар унших
-      if (googleSheetsUrlInput.value.trim()) {
+      // Зөвхөн dropdown утга үнэхээр өөрчлөгдсөн үед л унших (page load үед биш)
+      const currentValue = googleSheetsUrlInput.value.trim();
+      if (currentValue && currentValue !== lastSelectedUrl) {
+        lastSelectedUrl = currentValue;
         loadGoogleSheets();
       }
       
