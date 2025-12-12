@@ -1,0 +1,2417 @@
+// Production/Development mode detection
+const isDevelopment = window.location.hostname === 'localhost' || 
+  window.location.hostname === '127.0.0.1' ||
+  window.location.protocol === 'file:';
+
+// Debug logging - зөвхөн development mode-д харагдана
+const debugLog = isDevelopment ? console.log.bind(console) : () => {};
+const debugWarn = isDevelopment ? console.warn.bind(console) : () => {};
+// Error logs үргэлж харагдана (production-д ч шаардлагатай)
+const debugError = console.error.bind(console);
+
+const googleSheetsUrlInput = document.getElementById("google-sheets-url");
+const loadGoogleSheetsBtn = document.getElementById("load-google-sheets");
+const sheetSelect = document.getElementById("sheet-select");
+const statusEl = document.getElementById("status");
+const tableContainer = document.createElement("div"); // not shown in UI, used for history copy
+const equipmentSelect = document.getElementById("equipment-select");
+const summaryPill = document.getElementById("summary-pill");
+const detailContainer = null; // "Сонгосон тоноглолын дэлгэрэнгүй" хэсэг устгагдсан
+const historyTableContainer = document.getElementById("history-table-container");
+const downloadBtn = document.getElementById("download-updated");
+const saveToGoogleSheetsBtn = document.getElementById("save-to-google-sheets");
+const googleApiKeyInput = document.getElementById("google-api-key");
+const viewSection = document.getElementById("view-section");
+const historySection = document.getElementById("history-section");
+
+let workbook = null;
+let sheetData = [];
+let equipmentField = null;
+let headers = [];
+let viewHeaders = [];
+let combine78 = false; // 7+8-г нэгтгэхгүй, салгасан горим
+const editableFieldName = "Тавилын утга өөрчөх";
+let originalFileName = null; // Google Sheets нэр
+let googleSheetId = null; // Google Sheets ID (хадгалахад ашиглана)
+let googleSheetGid = "0"; // Google Sheets GID (хадгалахад ашиглана)
+let sheetNameToGidMap = {}; // Sheet name -> GID mapping (хадгалахад ашиглана)
+let footerData = []; // Footer мөрүүд (15-18-р мөрүүд)
+let headerRowIndex = 1; // Google Sheets дээрх header мөрийн дугаар (1-based, default = row 1)
+
+const clearTable = () => { tableContainer.innerHTML = ""; };
+const clearHistoryTable = () => { historyTableContainer.innerHTML = ""; };
+
+// Loading overlay functions
+let loadingOverlay = null;
+
+const showLoading = (message = "Ачааллаж байна...") => {
+  hideLoading(); // Хэрэв аль хэдийн байгаа бол хаах
+  
+  loadingOverlay = document.createElement("div");
+  loadingOverlay.className = "loading-overlay";
+  loadingOverlay.innerHTML = `
+<div class="spinner-large"></div>
+<div class="loading-text">${message}</div>
+  `;
+  document.body.appendChild(loadingOverlay);
+};
+
+const hideLoading = () => {
+  if (loadingOverlay && loadingOverlay.parentNode) {
+loadingOverlay.parentNode.removeChild(loadingOverlay);
+loadingOverlay = null;
+  }
+};
+
+// User-friendly error messages
+const getUserFriendlyError = (error) => {
+  const errorMsg = error?.message || String(error || "");
+  const errorLower = errorMsg.toLowerCase();
+  
+  // Network errors
+  if (errorLower.includes('network') || errorLower.includes('fetch') || errorLower.includes('failed')) {
+return "🌐 Интернэт холболтын алдаа.\n\nШийдэл:\n• Интернэт холболт шалгах\n• VPN-ийг унтраах\n• Дахин оролдох";
+  }
+  
+  // OAuth errors
+  if (errorLower.includes('oauth') || errorLower.includes('redirect_uri') || errorLower.includes('400')) {
+return "🔐 Google нэвтрэх алдаа.\n\nШийдэл:\n• Google Cloud Console дээр 'Authorized redirect URIs' шалгах\n• Одоогийн URL-ийг нэмэх\n• Browser-ийг refresh хийх";
+  }
+  
+  // Permission errors
+  if (errorLower.includes('403') || errorLower.includes('forbidden') || errorLower.includes('эрх')) {
+return "🚫 Эрх хүрэхгүй байна.\n\nШийдэл:\n• Google Sheets → Share → Email-д 'Editor' эрх өгөх\n• Restricted байвал email-ийг нэмэх";
+  }
+  
+  // Not found errors
+  if (errorLower.includes('404') || errorLower.includes('not found') || errorLower.includes('олдсонгүй')) {
+return "🔍 Файл эсвэл хуудас олдсонгүй.\n\nШийдэл:\n• Google Sheets URL зөв эсэхийг шалгах\n• Sheet нэр зөв эсэхийг шалгах";
+  }
+  
+  // Timeout errors
+  if (errorLower.includes('timeout') || errorLower.includes('хэт удаан')) {
+return "⏱ Хугацаа дууссан.\n\nШийдэл:\n• Интернэт холболт шалгах\n• Дахин оролдох\n• Өгөгдөл их байвал хэсэгчлэн унших";
+  }
+  
+  // Generic error - return original message but formatted
+  return `❌ Алдаа гарлаа.\n\n${errorMsg}\n\nШийдэл:\n• Browser-ийг refresh хийх (F5)\n• Интернэт холболт шалгах\n• Дахин оролдох`;
+};
+
+const showError = (msg) => {
+  if (!msg || msg.trim() === "") {
+if (statusEl) {
+  statusEl.innerHTML = "";
+  statusEl.style.display = "none";
+}
+return;
+  }
+  
+  // User-friendly error message
+  const friendlyMsg = getUserFriendlyError({ message: msg });
+  
+  // Status element дээр харуулах (alert-ийг арилгасан, зөвхөн status дээр харуулах)
+  if (statusEl) {
+statusEl.innerHTML = `<div class="error">${friendlyMsg.replace(/\n/g, "<br>")}</div>`;
+statusEl.style.display = "block";
+// Scroll to status element
+setTimeout(() => {
+  statusEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}, 100);
+  }
+  
+  debugError("Error:", msg);
+};
+
+const setStatus = (msg) => {
+  if (!statusEl) {
+debugError("statusEl олдсонгүй!");
+return;
+  }
+  
+  if (!msg || msg.trim() === "") {
+statusEl.innerHTML = "";
+statusEl.style.display = "none";
+  } else {
+statusEl.innerHTML = msg.replace(/\n/g, "<br>");
+statusEl.style.display = "block";
+  }
+};
+
+const mergeColumns = (rows, currentHeaders, colsToMerge, newName) => {
+  const indices = colsToMerge.map(c => currentHeaders.indexOf(c)).filter(i => i >= 0);
+  if (!indices.length) return { headers: currentHeaders, rows };
+
+  const firstIdx = Math.min(...indices);
+  // Remove any existing newName to avoid duplicates
+  let baseHeaders = currentHeaders.filter(h => h !== newName && !colsToMerge.includes(h));
+  baseHeaders.splice(firstIdx, 0, newName);
+
+  const newRows = rows.map(r => {
+const combined = colsToMerge
+  .map(c => (r[c] ?? "").toString().trim())
+  .filter(Boolean)
+  .join(" / ");
+const obj = {};
+baseHeaders.forEach(h => {
+  if (h === newName) obj[h] = combined;
+  else obj[h] = r[h];
+});
+obj.__rowIndex = r.__rowIndex;
+return obj;
+  });
+  return { headers: baseHeaders, rows: newRows };
+};
+
+const buildViewData = (data) => {
+  let currentHeaders = [...headers];
+  let currentRows = data.map(r => ({ ...r }));
+
+  // Always merge 8-10 into editable field name if present
+  const cols810 = ["Колон-8", "Колон-9", "Колон-10"];
+  if (cols810.some(c => currentHeaders.includes(c))) {
+const merged = mergeColumns(currentRows, currentHeaders, cols810, editableFieldName);
+currentHeaders = merged.headers;
+currentRows = merged.rows;
+  }
+
+  viewHeaders = currentHeaders;
+  return currentRows;
+};
+
+const renderTable = (data) => {
+  if (!data?.length) {
+const emptyMsg = `
+  <div style="padding: 40px; text-align: center; color: var(--muted);">
+<p style="font-size: 18px; margin-bottom: 8px;">📋 Хүснэгт хоосон байна</p>
+<p style="font-size: 14px;">Өгөгдөл олдсонгүй. Google Sheets-ээс өгөгдөл уншуулаарай.</p>
+  </div>
+`;
+tableContainer.innerHTML = emptyMsg;
+historyTableContainer.innerHTML = emptyMsg;
+return;
+  }
+  const processed = buildViewData(data);
+  debugLog("Processed data:", processed.slice(0, 3));
+  debugLog("View headers:", viewHeaders);
+  
+  // "Тавилын утга" баганын утгуудыг шалгах
+  const tavlynUtgaIndex = viewHeaders.findIndex(h => /тавилын утга/i.test(h));
+  if (tavlynUtgaIndex >= 0) {
+const tavlynUtgaHeader = viewHeaders[tavlynUtgaIndex];
+debugLog("Тавилын утга баганын утгууд:", processed.map(r => ({ 
+  value: r[tavlynUtgaHeader], 
+  type: typeof r[tavlynUtgaHeader],
+  raw: r[tavlynUtgaHeader]
+})).slice(0, 10));
+debugLog("Тавилын утга баганын header:", tavlynUtgaHeader);
+debugLog("Эхний мөрийн бүх утгууд:", processed[0]);
+  }
+  // Header render хийх - "Өөрчлөлтүүд"-ийг "Тавил оруулах" болгох
+  // Гэхдээ "Өөрчлөлт 1", "Өөрчлөлт 2" гэх мэт багануудыг өөрчлөхгүй
+  // Мөн "Тавил оруулах" header аль хэдийн байгаа эсэхийг шалгах
+  const hasTavilOruulah = viewHeaders.some(h => /^тавил оруулах$/i.test((h || "").toString().trim()));
+  
+  const displayHeaders = viewHeaders.map(h => {
+const headerStr = (h || "").toString().trim();
+// Зөвхөн "Өөрчлөлтүүд" баганыг "Тавил оруулах" болгох
+// Гэхдээ "Тавил оруулах" header аль хэдийн байгаа бол өөрчлөхгүй
+// "Өөрчлөлт 1", "Өөрчлөлт 2" гэх мэт багануудыг өөрчлөхгүй
+if (/^өөрчлөлтүүд$/i.test(headerStr) && !hasTavilOruulah) {
+  return "Тавил оруулах";
+}
+return h;
+  });
+  const thead = `<thead><tr>${displayHeaders.map(h => `<th>${h}</th>`).join("")}</tr></thead>`;
+  
+  // Debug: viewHeaders-д "өөрчлөлт" байгаа эсэхийг шалгах
+  // Бүх хувилбаруудыг шалгах: "өөрчлөлт", "өөрчлөлтүүд", "өөрчлөлтүүд" гэх мэт
+  const oorchloltHeaderIndex = viewHeaders.findIndex(h => {
+const headerStr = (h || "").toString().trim().toLowerCase();
+return /өөрчлөлт/i.test(headerStr);
+  });
+  
+  debugLog("Editable багана шалгалт:", {
+viewHeaders,
+viewHeadersDetailed: viewHeaders.map((h, i) => ({ index: i, name: h, test: /өөрчлөлт/i.test(h || "") })),
+oorchloltHeaderIndex,
+oorchloltHeader: oorchloltHeaderIndex >= 0 ? viewHeaders[oorchloltHeaderIndex] : "Олдсонгүй"
+  });
+  
+  // Sheet-ийн нэрэнд "IP" байгаа эсэхийг шалгах (renderTable функц дотор эхэлж тодорхойлох)
+  const currentSheetName = sheetSelect.value || "";
+  const isIPSheet = /IP/i.test(currentSheetName);
+  
+  // Хэрэв "өөрчлөлт" header олдохгүй бол, сүүлийн баганыг editable болгох (fallback)
+  // IP sheet-ийн тохиолдолд энэ warning хэвлэхгүй
+  if (oorchloltHeaderIndex < 0 && !isIPSheet) {
+debugWarn("'өөрчлөлт' header олдсонгүй! Сүүлийн баганыг editable болгох fallback ашиглаж байна.");
+  }
+  
+  // Merge логик устгасан - бүх cell-үүд хэвийн харагдана
+  const rows = processed.map((row, rowIdx) => {
+let rowHtml = '<tr>';
+
+viewHeaders.forEach((h, colIdx) => {
+  let val = row[h];
+  
+  // Value-г string болгох
+  if (val === null || val === undefined) {
+val = "";
+  } else {
+val = String(val);
+  }
+  // "Хоосон" гэсэн утгыг хоосон string болгох
+  if (val.trim().toLowerCase() === "хоосон" || val.trim() === "XOOCOH") {
+val = "";
+  }
+  
+  // Зөвхөн "Тавил оруулах" (өөрчлөлтүүд) баганыг засварлах боломжтой
+  // "Өөрчлөлт 1", "Өөрчлөлт 2" гэх мэт баганууд read-only байх ёстой
+  const headerStr = (h || "").toString().trim();
+  
+  // "Өөрчлөлт 1", "Өөрчлөлт 2" гэх мэт багануудыг шалгах (read-only)
+  const isOorchloltVersion = /^өөрчлөлт\s+\d+$/i.test(headerStr);
+  
+  // "Тавил оруулах" (өөрчлөлтүүд) баганыг editable болгох
+  // Гэхдээ "Өөрчлөлт 1", "Өөрчлөлт 2" гэх мэт баганууд биш
+  // Хэрэв IP sheet бол эхний 2 баганаас бусад багануудыг editable болгох
+  let isEditable = false;
+  
+  if (isIPSheet) {
+// IP sheet: эхний 3 баганаас бусад багануудыг editable болгох
+if (colIdx >= 3) {
+  isEditable = true;
+}
+  } else {
+// Бусад sheet: зөвхөн "Тавил оруулах" баганыг editable болгох
+if (!isOorchloltVersion) {
+  // "өөрчлөлтүүд" эсвэл "тавил оруулах" гэсэн header-ийг олох
+  isEditable = /^өөрчлөлтүүд$/i.test(headerStr) || 
+  /^тавил оруулах$/i.test(headerStr) ||
+  (oorchloltHeaderIndex >= 0 && colIdx === oorchloltHeaderIndex);
+  
+  // Fallback: хэрэв "өөрчлөлт" header олдохгүй бол, сүүлийн баганыг editable болгох
+  // Гэхдээ зөвхөн "Өөрчлөлт N" биш багана
+  if (!isEditable && oorchloltHeaderIndex < 0 && colIdx === viewHeaders.length - 1 && !isOorchloltVersion) {
+isEditable = true;
+debugLog("Fallback: Сүүлийн баганыг editable болгож байна:", {
+  header: h,
+  colIdx,
+  viewHeadersLength: viewHeaders.length
+});
+  }
+}
+  }
+  
+  // Debug: эхний мөрөнд editable багана шалгах
+  if (rowIdx === 0 && (colIdx === 0 || colIdx === oorchloltHeaderIndex)) {
+debugLog("Editable багана шалгалт (эхний мөр):", {
+  header: h,
+  colIdx,
+  oorchloltHeaderIndex,
+  isEditable,
+  viewHeaders,
+  test1: /өөрчлөлт/i.test(h),
+  test2: (oorchloltHeaderIndex >= 0 && colIdx === oorchloltHeaderIndex)
+});
+  }
+  
+  const valStr = String(val || "").trim();
+  const escapedVal = valStr.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  
+  if (isEditable) {
+// "өөрчлөлтүүд" багана (одоо "Тавил оруулах" гэж харагдана) - засварлах боломжтой
+const finalValue = escapedVal || "";
+// Анхны утгыг data attribute-оор хадгалах (IP sheet-ийн тохиолдолд хадгалах логикт ашиглана)
+const initialValueAttr = finalValue.replace(/"/g, '&quot;');
+// Input field-д disabled эсвэл readonly attribute байхгүй байх ёстой
+rowHtml += `<td><input type="text" data-row="${row.__rowIndex}" data-field="${h}" data-initial-value="${initialValueAttr}" value="${finalValue}" class="editable-input" style="width: 100%; padding: 6px 10px; border: 2px solid var(--border); border-radius: 6px; background: #fff; cursor: text;"></td>`;
+
+// Debug: эхний мөрөнд input field render хийгдэж байгаа эсэхийг шалгах
+if (rowIdx === 0) {
+  debugLog("Input field render хийгдэж байна:", {
+header: h,
+colIdx,
+oorchloltHeaderIndex,
+dataField: h,
+value: finalValue,
+rowIndex: row.__rowIndex,
+isEditable
+  });
+}
+  } else {
+// Бусад баганууд - read-only (зөвхөн харагдана)
+rowHtml += `<td style="padding: 8px 12px;">${escapedVal || ""}</td>`;
+  }
+});
+
+rowHtml += '</tr>';
+return rowHtml;
+  });
+  
+  const html = `<table>${thead}<tbody>${rows.join("")}</tbody></table>`;
+  tableContainer.innerHTML = html;
+  historyTableContainer.innerHTML = html;
+};
+
+const detectEquipmentField = (headers) => {
+  const exactList = ["Тоноглолын нэр", "тоноглолын нэр", "Тоноглолын нэр:", "тоноглол"];
+  const exact = headers.find(h => exactList.includes(h));
+  if (exact) return exact;
+  const hit = headers.find(h => /тоног/i.test(h)) || headers[0];
+  return hit || null;
+};
+
+const populateEquipmentFieldDropdown = () => {
+  // Тоноглолын багана dropdown устгагдсан
+};
+
+const populateEquipmentDropdown = () => {
+  equipmentSelect.innerHTML = `<option value="__all__">Бүгд</option>`;
+  if (!sheetData.length || !equipmentField) return;
+  const seen = new Set();
+  sheetData
+.map(r => r[equipmentField])
+.forEach(v => {
+  const val = (v ?? "").toString().trim();
+  if (!val) return;
+  if (seen.has(val)) return;
+  seen.add(val);
+  const opt = document.createElement("option");
+  opt.value = val;
+  opt.textContent = val;
+  equipmentSelect.appendChild(opt);
+});
+  if (equipmentSelect.options.length === 1) {
+const opt = document.createElement("option");
+opt.value = "";
+opt.textContent = "(утга олдсонгүй)";
+equipmentSelect.appendChild(opt);
+  }
+};
+
+const applyFilter = () => {
+  if (!sheetData.length) {
+clearTable();
+summaryPill.textContent = "Өгөгдөл алга";
+if (detailContainer) detailContainer.innerHTML = "";
+return;
+  }
+  const sel = equipmentSelect.value;
+  const filtered = sel === "__all__"
+? sheetData
+: sheetData.filter(row => (row[equipmentField] ?? "").toString().trim() === sel);
+
+  summaryPill.textContent = `${filtered.length} мөр / ${sheetData.length} нийт | Талбар: ${equipmentField || "танигдаагүй"}`;
+  renderTable(filtered);
+  renderDetail(filtered);
+};
+
+const renderDetail = (filtered) => {
+  if (!detailContainer) return; // "Сонгосон тоноглолын дэлгэрэнгүй" хэсэг устгагдсан
+  if (!filtered?.length) {
+if (detailContainer) detailContainer.innerHTML = "";
+return;
+  }
+  // Нэгдүгээр мөрөөр дэлгэрэнгүй үзүүлнэ
+  const row = filtered[0];
+  const displayHeaders = viewHeaders?.length ? viewHeaders : headers;
+  
+  // Тодорхой талбаруудыг эхлээд харуулах: Д/д, Тоноглолын нэр, Хамгаалалтын төрөл, Параметр, Тавилын утга
+  const priorityHeaders = [
+{ keywords: ["д/д", "д\\/д"], name: "Д/д" },
+{ keywords: ["тоноглолын нэр", "тоноглол"], name: "Тоноглолын нэр" },
+{ keywords: ["хамгаалалтын төрөл", "хамгаалалт"], name: "Хамгаалалтын төрөл" },
+{ keywords: ["параметр"], name: "Параметр" },
+{ keywords: ["тавилын утга", "тавил"], name: "Тавилын утга" }
+  ];
+  const priorityFields = [];
+  const otherFields = [];
+  
+  displayHeaders.forEach(h => {
+const headerStr = (h || "").toString().trim().toLowerCase();
+let isPriority = false;
+let priorityName = null;
+
+for (const ph of priorityHeaders) {
+  const matches = ph.keywords.some(keyword => {
+const regex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+return regex.test(headerStr);
+  });
+  
+  if (matches) {
+isPriority = true;
+priorityName = ph.name;
+break;
+  }
+}
+
+if (isPriority) {
+  priorityFields.push({ header: h, priorityName });
+} else {
+  otherFields.push(h);
+}
+  });
+  
+  // Priority fields-ийг дарааллаар эрэмбэлэх
+  priorityFields.sort((a, b) => {
+const aIndex = priorityHeaders.findIndex(ph => ph.name === a.priorityName);
+const bIndex = priorityHeaders.findIndex(ph => ph.name === b.priorityName);
+return aIndex - bIndex;
+  });
+  
+  // Эхлээд priority fields, дараа нь бусад fields
+  const orderedHeaders = [
+...priorityFields.map(pf => pf.header),
+...otherFields
+  ];
+  
+  const html = orderedHeaders.map(h => {
+const val = (row[h] ?? "").toString();
+const display = val.trim() ? val : `<span class="detail-empty">ХООСОН</span>`;
+return `<div class="label">${h}</div><div class="value">${display}</div>`;
+  }).join("");
+  detailContainer.innerHTML = html;
+};
+
+
+const loadSheet = (sheetName) => {
+  if (!workbook || !sheetName) {
+debugError("Workbook эсвэл sheetName байхгүй байна", { workbook, sheetName });
+return;
+  }
+  
+  try {
+const worksheet = workbook.Sheets[sheetName];
+if (!worksheet) {
+  debugError("Worksheet олдсонгүй:", sheetName);
+  showError(`Sheet "${sheetName}" олдсонгүй.`);
+  return;
+}
+
+// Read as rows to avoid __EMPTY headers and pick the best header row
+const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+
+if (!rows.length) {
+  debugWarn("Sheet хоосон байна");
+  sheetData = [];
+  headers = [];
+  populateEquipmentFieldDropdown();
+  populateEquipmentDropdown();
+  applyFilter();
+  setStatus("Sheet хоосон байна.");
+  return;
+}
+
+const scoreRow = (row, idx) => {
+  const nonEmpty = row.filter(c => (c ?? "").toString().trim() !== "").length;
+  
+  // Хоосон мөрийг header гэж тооцохгүй
+  if (nonEmpty === 0) {
+return -5000;
+  }
+  
+  // Header мөрийн тэмдэглэгээ - яг таарч байгаа эсэхийг шалгах (илүү уян хатан)
+  const hasTonog = row.some(c => {
+const val = String(c).trim().toLowerCase();
+return /тоноглолын нэр/i.test(val) || /тоноглол/i.test(val);
+  });
+  const hasDd = row.some(c => {
+const val = String(c).trim();
+return /^д\/д$/i.test(val) || val === "Д/д" || /^д\/д$/i.test(val);
+  });
+  const hasHamgaalalt = row.some(c => {
+const val = String(c).trim().toLowerCase();
+return /хамгаалалтын төрөл/i.test(val) || /хамгаалалт/i.test(val);
+  });
+  const hasParametr = row.some(c => {
+const val = String(c).trim().toLowerCase();
+return /^параметр$/i.test(val) || /параметр/i.test(val);
+  });
+  const hasTavlynUtga = row.some(c => {
+const val = String(c).trim().toLowerCase();
+return /тавилын утга/i.test(val) || /тавил/i.test(val);
+  });
+  const hasOorchlolt = row.some(c => {
+const val = String(c).trim().toLowerCase();
+return /өөрчлөлт/i.test(val);
+  });
+  
+  // Header мөрийн оноо - олон header тэмдэглэгээ байх нь чухал
+  let score = nonEmpty * 2; // Олон баганад утга байх нь header мөрийн шинж
+  if (hasTonog) score += 25;
+  if (hasDd) score += 20;
+  if (hasHamgaalalt) score += 20;
+  if (hasParametr) score += 18;
+  if (hasTavlynUtga) score += 18;
+  if (hasOorchlolt) score += 15;
+  
+  // Хэрэв 3-ээс олон header тэмдэглэгээ байвал энэ нь header мөр байх магадлалтай
+  const headerCount = [hasTonog, hasDd, hasHamgaalalt, hasParametr, hasTavlynUtga, hasOorchlolt].filter(Boolean).length;
+  if (headerCount >= 3) {
+score += 50; // 3-аас олон header тэмдэглэгээ байвал энэ нь header мөр байх магадлалтай
+  }
+  
+  // Header мөр нь ихэвчлэн 1-р мөр эсвэл 3-р мөрөнд байдаг
+  const positionBonus = (idx === 0 && headerCount >= 3) ? 30 : // 1-р мөрөнд header keywords байвал илүү өндөр оноо
+(idx === 2) ? 20 : 
+(idx >= 1 && idx < 10) ? 10 : 
+(idx >= 0 && idx < 10) ? 3 : 0;
+  
+  return score + positionBonus;
+};
+
+// Header мөрийг олох - 1-р мөрийг шууд header мөр гэж ашиглах
+let headerIdx = 0; // Зөвхөн 1-р мөрийг header мөр гэж ашиглах
+let bestScore = 100; // Score шаардлагагүй, шууд 1-р мөр
+
+debugLog(`1-р мөрийг header мөр гэж сонголоо (headerIdx=${headerIdx})`);
+debugLog("Header мөрийн утгууд:", rows[headerIdx]);
+
+
+debugLog(`Header мөр олдлоо: мөр ${headerIdx + 1}, оноо: ${bestScore}`);
+debugLog("Header мөрийн утгууд:", rows[headerIdx]);
+debugLog("Header мөрийн утгууд (дэлгэрэнгүй):", rows[headerIdx].map((c, i) => `[${i}]: "${(c ?? "").toString().trim()}"`));
+
+// Google Sheets дээрх header мөрийн дугаарыг хадгалах (1-based)
+headerRowIndex = headerIdx + 1;
+debugLog(`Header мөр Google Sheets дээр: row ${headerRowIndex}`);
+
+const rawHeaders = rows[headerIdx].map((c, i) => {
+  const name = (c ?? "").toString().trim();
+  return name || `Колон-${i + 1}`;
+});
+
+headers = rawHeaders;
+debugLog("Headers олдлоо:", headers);
+debugLog("Headers (дэлгэрэнгүй):", headers.map((h, i) => `[${i}]: "${h}"`));
+
+// Header мөрийн зөв эсэхийг шалгах
+const expectedHeaders = ["Д/д", "Тоноглолын нэр", "Хамгаалалтын төрөл", "параметр", "Тавилын утга", "өөрчлөлтүүд"];
+const foundHeaders = expectedHeaders.map(eh => {
+  const idx = headers.findIndex(h => h.toLowerCase().includes(eh.toLowerCase()) || eh.toLowerCase().includes(h.toLowerCase()));
+  return { expected: eh, found: idx >= 0 ? headers[idx] : null, index: idx };
+});
+debugLog("Header мөрийн зөв эсэх шалгалт:", foundHeaders);
+
+// Body мөрүүдийг олох - header мөрийн дараахийн бүх мөрүүд
+const bodyRows = rows.slice(headerIdx + 1);
+debugLog(`Body rows (бүх): ${bodyRows.length} мөр (header мөр: ${headerIdx + 1}, нийт мөр: ${rows.length})`);
+if (bodyRows.length > 0) {
+  debugLog("Эхний 5 body мөр:", bodyRows.slice(0, 5).map(r => r.slice(0, 6).map(c => (c ?? "").toString().trim().substring(0, 15))));
+  // Эхний body мөрийн дэлгэрэнгүй мэдээлэл
+  debugLog("Эхний body мөр (дэлгэрэнгүй):", bodyRows[0].map((c, i) => `[${i}]: "${(c ?? "").toString().trim()}" (header: "${headers[i] || 'N/A'}")`));
+} else {
+  debugWarn("Body мөр олдсонгүй! Header мөрийн дараа мөр байхгүй байна.");
+}
+
+// Footer мөрүүдийг олох (Тавил тавьсан, Албат тоотын дугаар гэх мэт)
+const footerKeywords = ["тавил тавьсан", "албат тоотын", "протоколын дугаар", "он сар өдөр", "инженер"];
+const footerRows = [];
+const dataRows = [];
+
+bodyRows.forEach((r, idx) => {
+  const rowText = r.map(c => (c ?? "").toString().trim().toLowerCase()).join(" ");
+  const isFooter = footerKeywords.some(keyword => rowText.includes(keyword));
+  
+  const hasData = r.some(c => {
+const val = (c ?? "").toString().trim();
+return val && val.length > 0;
+  });
+  
+  if (isFooter) {
+footerRows.push({ row: r, originalIdx: headerIdx + 1 + idx + 1 });
+// Footer мөрүүдийг мөн dataRows-д нэмэх (хүснэгтэд харуулах)
+if (hasData) {
+  dataRows.push(r);
+}
+  } else {
+if (hasData) {
+  dataRows.push(r);
+}
+  }
+});
+
+debugLog(`Data rows: ${dataRows.length} мөр (bodyRows: ${bodyRows.length})`);
+debugLog(`Footer rows: ${footerRows.length} мөр`);
+if (dataRows.length === 0 && bodyRows.length > 0) {
+  debugWarn("Data rows олдсонгүй! Body мөрүүд байгаа боловч бүх мөр хоосон байна.");
+  debugLog("Эхний body мөрийн утгууд:", bodyRows[0]?.slice(0, 6).map(c => (c ?? "").toString().trim()));
+}
+if (footerRows.length > 0) {
+  debugLog("Footer мөрүүд:", footerRows.map(fr => fr.row.slice(0, 3).map(c => (c ?? "").toString().trim())));
+}
+
+// Footer мөрүүдийг хадгалах
+footerData = footerRows.map(fr => {
+  // Footer мөрүүд нь ихэвчлэн 2 багана: тайлбар (B-F merged) болон утга (G)
+  // B багана (index 1) -ээс F багана (index 5) хүртэл merged, G багана (index 6) утга
+  let label = "";
+  let value = "";
+  
+  // Эхлээд B баганаас (index 1) хайх
+  for (let i = 1; i < Math.min(6, fr.row.length); i++) {
+const cellVal = (fr.row[i] ?? "").toString().trim();
+if (cellVal) {
+  label = cellVal;
+  break;
+}
+  }
+  
+  // Хэрэв B багана хоосон бол A баганаас хайх
+  if (!label && fr.row[0]) {
+label = fr.row[0].toString().trim();
+  }
+  
+  // G багана (index 6) эсвэл H багана (index 7) утга
+  value = (fr.row[6] ?? fr.row[7] ?? "").toString().trim();
+  
+  return { label, value, originalRow: fr.originalIdx };
+});
+
+sheetData = dataRows.map((row, idx) => {
+  const obj = {};
+  headers.forEach((h, colIdx) => { 
+// Row array-ийн урт header-ийн уртаас бага байж болно
+const val = row[colIdx] !== undefined ? row[colIdx] : "";
+const valStr = (val ?? "").toString();
+obj[h] = valStr;
+
+// Debug: "Тавилын утга" баганын утгуудыг хэвлэх
+if (/тавилын утга/i.test(h) && idx < 3 && valStr) {
+  debugLog(`Row ${idx}, Column ${colIdx} (${h}): "${valStr}" (original: ${val})`);
+}
+  });
+  obj.__rowIndex = idx;
+  return obj;
+});
+
+// Debug: Эхний мөрийн бүх утгуудыг хэвлэх
+if (sheetData.length > 0) {
+  debugLog("Эхний мөрийн бүх утгууд:", sheetData[0]);
+  debugLog("Эхний мөрийн row array:", dataRows[0]);
+  // Эхний мөрийн дэлгэрэнгүй мэдээлэл
+  debugLog("Эхний мөрийн дэлгэрэнгүй мэдээлэл:", Object.keys(sheetData[0]).map(key => `${key}: "${sheetData[0][key]}"`));
+}
+
+debugLog(`Sheet data: ${sheetData.length} мөр уншлаа`);
+if (sheetData.length > 0) {
+  debugLog("Эхний sheet data мөр:", sheetData[0]);
+  // "Тавилын утга" баганын утгуудыг шалгах
+  const tavlynUtgaHeader = headers.find(h => /тавилын утга/i.test(h));
+  if (tavlynUtgaHeader) {
+debugLog("Тавилын утга баганын утгууд (эхний 5):", sheetData.slice(0, 5).map(r => r[tavlynUtgaHeader]));
+  }
+}
+
+if (sheetData.length === 0) {
+  const headerPreview = rows[headerIdx]?.slice(0, 6).map(c => (c ?? "").toString().trim()).join(", ") || "Хоосон";
+  const firstBodyRowPreview = bodyRows[0]?.slice(0, 6).map(c => (c ?? "").toString().trim()).join(", ") || "Хоосон";
+  const errorMsg = `Sheet-д өгөгдөл олдсонгүй.\n\nHeader мөр: ${headerIdx + 1} (${headerPreview})\nBody мөрүүд: ${bodyRows.length}\nData мөрүүд: ${dataRows.length}\n\nЭхний body мөр: ${firstBodyRowPreview}\n\nЗөвлөмж:\n1. Google Sheets-д header мөр байгаа эсэхийг шалгах\n2. Header мөрийн доош өгөгдөл байгаа эсэхийг шалгах\n3. Console-оос дэлгэрэнгүй мэдээлэл харах`;
+  debugError("Sheet-д өгөгдөл олдсонгүй!", {
+headerIdx: headerIdx + 1,
+headerRow: rows[headerIdx],
+bodyRowsCount: bodyRows.length,
+dataRowsCount: dataRows.length,
+firstBodyRow: bodyRows[0],
+allRows: rows.length
+  });
+  setStatus(errorMsg);
+  showError(errorMsg);
+}
+
+// Default equipment field: second column if exists; else detected; else first
+equipmentField = headers[1] || detectEquipmentField(headers) || headers[0] || null;
+debugLog("Equipment field:", equipmentField);
+
+// Fill-down for merged-like blanks in columns that should be merged
+// Эхний багана (Д/д), тоноглолын нэр, хамгаалалтын төрөл багануудад fill-down хийх
+const firstColName = headers[0] || "";
+const protectionTypeColName = headers.find(h => /хамгаалалтын төрөл/i.test(h) || h.includes('Хамгаалалтын төрөл')) || "";
+
+// Fill-down for equipment field
+if (equipmentField) {
+  let last = "";
+  sheetData.forEach(row => {
+const val = (row[equipmentField] ?? "").toString().trim();
+if (val) last = val;
+else row[equipmentField] = last;
+  });
+}
+
+// Fill-down for first column (Д/д)
+if (firstColName) {
+  let last = "";
+  sheetData.forEach(row => {
+const val = (row[firstColName] ?? "").toString().trim();
+if (val) last = val;
+else if (last) row[firstColName] = last;
+  });
+}
+
+// Fill-down for protection type column
+if (protectionTypeColName) {
+  let last = "";
+  sheetData.forEach(row => {
+const val = (row[protectionTypeColName] ?? "").toString().trim();
+if (val) last = val;
+else if (last) row[protectionTypeColName] = last;
+  });
+}
+
+
+populateEquipmentFieldDropdown();
+populateEquipmentDropdown();
+viewHeaders = [...headers];
+applyFilter();
+
+  } catch (err) {
+debugError("loadSheet алдаа:", err);
+showError(`Sheet унших алдаа: ${err.message}`);
+  }
+};
+
+const populateSheetDropdown = () => {
+  sheetSelect.innerHTML = "";
+  if (!workbook?.SheetNames?.length) return;
+  workbook.SheetNames.forEach((name, idx) => {
+const opt = document.createElement("option");
+opt.value = name;
+opt.textContent = name;
+if (idx === 0) opt.selected = true;
+sheetSelect.appendChild(opt);
+  });
+  loadSheet(sheetSelect.value);
+};
+
+sheetSelect.addEventListener("change", () => loadSheet(sheetSelect.value));
+equipmentSelect.addEventListener("change", applyFilter);
+
+// Хүснэгтэд засвар хийх event listener
+const handleTableInput = (e) => {
+  const t = e.target;
+  if (t.tagName !== "INPUT") return;
+  const rowIdx = Number(t.dataset.row);
+  const field = t.dataset.field;
+  if (Number.isNaN(rowIdx) || !field) return;
+  const row = sheetData.find(r => r.__rowIndex === rowIdx);
+  if (!row) return;
+  row[field] = t.value;
+  
+  // Дэлгэрэнгүй мэдээллийг шинэчлэх
+  const filtered = equipmentSelect.value === "__all__"
+? sheetData
+: sheetData.filter(r => (r[equipmentField] ?? "").toString().trim() === equipmentSelect.value);
+  if (filtered.length > 0 && filtered[0].__rowIndex === rowIdx) {
+renderDetail([row]);
+  }
+};
+
+historyTableContainer.addEventListener("input", handleTableInput);
+tableContainer.addEventListener("input", handleTableInput);
+
+downloadBtn.addEventListener("click", async () => {
+  if (!workbook) {
+showError("Эхлээд Excel файл уншуулаарай.");
+return;
+  }
+  if (!sheetSelect.value) {
+showError("Sheet сонгогдоогүй байна.");
+return;
+  }
+  const cleanRows = sheetData.map(r => {
+const obj = {};
+headers.forEach(h => { obj[h] = r[h]; });
+return obj;
+  });
+  const newSheet = XLSX.utils.json_to_sheet(cleanRows, { header: headers, skipHeader: false });
+  workbook.Sheets[sheetSelect.value] = newSheet;
+  
+  // Excel файл татах
+  if (window.showSaveFilePicker) {
+// fileHandle байхгүй бол шинэ файл үүсгэх эсвэл байршлыг сонгох
+try {
+  const saveHandle = await window.showSaveFilePicker({
+suggestedName: originalFileName || "updated.xlsx",
+types: [{
+  description: "Excel файл",
+  accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] }
+}]
+  });
+  const wbout = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+  const writable = await saveHandle.createWritable();
+  await writable.write(new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  await writable.close();
+  setStatus(`Амжилттай хадгалагдлаа: ${saveHandle.name}`);
+} catch (err) {
+  if (err.name !== "AbortError") {
+debugError("Хадгалах алдаа:", err);
+// Fallback: энгийн татах
+const fileName = originalFileName || "updated.xlsx";
+XLSX.writeFile(workbook, fileName);
+setStatus(`Татагдлаа: ${fileName}`);
+  }
+}
+  } else {
+// Fallback: энгийн татах
+const fileName = originalFileName || "updated.xlsx";
+XLSX.writeFile(workbook, fileName);
+setStatus(`Татагдлаа: ${fileName} (татаж авсны дараа анхны файлыг орлуулна уу)`);
+  }
+});
+
+// Google Sheets дээр хадгалах
+saveToGoogleSheetsBtn.addEventListener("click", async () => {
+  if (!googleSheetId) {
+showError("Эхлээд Google Sheets уншуулаарай.");
+return;
+  }
+  if (!sheetSelect.value) {
+showError("Sheet сонгогдоогүй байна.");
+return;
+  }
+
+  try {
+// File:// protocol-ийг шалгах
+if (window.location.protocol === 'file:') {
+  showError(`Файлыг шууд нээж байна (file://). Google OAuth 2.0 ажиллахгүй.\n\nЗөвлөмж:\n1. Localhost дээр ажиллуулах:\n   - Terminal/Command Prompt нээх\n   - Энэ folder руу орох\n   - "python -m http.server 8000" эсвэл "npx http-server" гэж бичих\n   - Browser дээр "http://localhost:8000" нээх\n\n2. Эсвэл VS Code Live Server extension ашиглах`);
+  return;
+}
+
+showLoading("Google Sheets дээр хадгалаж байна...");
+
+// Google API-г идэвхжүүлэх
+if (!window.gapi) {
+  throw new Error("Google API library ачаалагдаагүй байна. Интернэт холболт шалгаарай.");
+}
+
+await new Promise((resolve, reject) => {
+  window.gapi.load('client', () => {
+window.gapi.client.init({
+  discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4']
+}).then(() => {
+  resolve();
+}).catch(reject);
+  });
+});
+
+// Localhost дээр ажиллаж байгаа эсэхийг шалгах
+const isLocalhost = window.location.hostname === 'localhost' || 
+   window.location.hostname === '127.0.0.1' ||
+   window.location.hostname === '';
+const currentOrigin = window.location.origin;
+
+debugLog("Current origin:", currentOrigin);
+debugLog("Is localhost:", isLocalhost);
+
+if (isLocalhost) {
+  setStatus(`Localhost дээр ажиллаж байна: ${currentOrigin}\nGoogle Cloud Console дээр "http://localhost" эсвэл "http://127.0.0.1" нэмэх хэрэгтэй.`);
+}
+
+// OAuth 2.0 token авах
+const clientId = googleApiKeyInput.value.trim();
+if (!clientId) {
+  showError("OAuth 2.0 Client ID оруулна уу.");
+  return;
+}
+
+// OAuth token шалгах - хэрэв байгаа бол дахин нэвтрэх шаардлагагүй
+const currentToken = window.gapi.client.getToken();
+if (!currentToken || !currentToken.access_token) {
+  // Token байхгүй бол л OAuth flow эхлүүлэх
+  setStatus("Google account-аар нэвтрэх шаардлагатай...");
+}
+
+// Хадгалах логикийг функц болгон гаргах (token байгаа эсвэл шинээр авсан үед ашиглах)
+const performSave = async () => {
+try {
+// Өөрчлөлтүүд баганын утгуудыг олох
+// Бүх хувилбаруудыг шалгах: "өөрчлөлт", "өөрчлөлтүүд", "Тавил оруулах" гэх мэт
+debugLog("Headers шалгалт (хадгалах):", {
+  headers,
+  headersDetailed: headers.map((h, i) => ({ 
+index: i, 
+name: h, 
+testOorchlolt: /өөрчлөлт/i.test(h || ""),
+testTavilOruulah: /тавил оруулах/i.test(h || "")
+  }))
+});
+
+// Эхлээд "өөрчлөлт" гэсэн header-ийг олох
+let oorchloltColIndex = headers.findIndex(h => {
+  const headerStr = (h || "").toString().trim();
+  return /өөрчлөлт/i.test(headerStr);
+});
+
+// Хэрэв олдохгүй бол "Тавил оруулах" гэсэн header-ийг олох
+if (oorchloltColIndex < 0) {
+  oorchloltColIndex = headers.findIndex(h => {
+const headerStr = (h || "").toString().trim();
+return /тавил оруулах/i.test(headerStr);
+  });
+  if (oorchloltColIndex >= 0) {
+debugLog("'Тавил оруулах' багана олдлоо (headers-д):", {
+  index: oorchloltColIndex,
+  header: headers[oorchloltColIndex]
+});
+  }
+}
+
+// Хэрэв headers-д олдохгүй бол, viewHeaders-ээс олох
+let finalOorchloltColIndex = oorchloltColIndex;
+
+if (oorchloltColIndex < 0) {
+  // Fallback: viewHeaders-ээс олох
+  let viewOorchloltColIndex = viewHeaders.findIndex(h => {
+const headerStr = (h || "").toString().trim();
+return /өөрчлөлт/i.test(headerStr);
+  });
+  
+  // Хэрэв олдохгүй бол "Тавил оруулах" гэсэн header-ийг олох
+  if (viewOorchloltColIndex < 0) {
+viewOorchloltColIndex = viewHeaders.findIndex(h => {
+  const headerStr = (h || "").toString().trim();
+  return /тавил оруулах/i.test(headerStr);
+});
+if (viewOorchloltColIndex >= 0) {
+  debugLog("'Тавил оруулах' багана олдлоо (viewHeaders-д):", {
+index: viewOorchloltColIndex,
+header: viewHeaders[viewOorchloltColIndex]
+  });
+}
+  }
+  
+  if (viewOorchloltColIndex >= 0) {
+const viewHeaderName = viewHeaders[viewOorchloltColIndex];
+debugWarn("Headers-д 'өөрчлөлт'/'Тавил оруулах' олдсонгүй, viewHeaders-ээс олдлоо:", {
+  viewHeaders,
+  viewOorchloltColIndex,
+  viewHeader: viewHeaderName
+});
+
+// headers-д энэ header name-ийг олох
+const matchedHeaderIndex = headers.findIndex(h => h === viewHeaderName);
+if (matchedHeaderIndex >= 0) {
+  finalOorchloltColIndex = matchedHeaderIndex;
+  debugLog("Headers-д viewHeader name-ээр олдлоо:", finalOorchloltColIndex);
+} else {
+  // Хэрэв headers-д олдохгүй бол, viewHeaders-ийн index-ийг ашиглах
+  // (headers болон viewHeaders нь ихэвчлэн ижил байдаг)
+  if (viewOorchloltColIndex < headers.length) {
+finalOorchloltColIndex = viewOorchloltColIndex;
+debugLog("ViewHeaders-ийн index-ийг ашиглаж байна:", finalOorchloltColIndex);
+  }
+}
+  }
+  
+  if (finalOorchloltColIndex < 0) {
+// IP sheet-ийн тохиолдолд "Өөрчлөлтүүд" багана шаардлагагүй
+const selectedSheetName = sheetSelect.value || "";
+const isIPSheet = /IP/i.test(selectedSheetName);
+
+if (!isIPSheet) {
+  showError(`Өөрчлөлтүүд/Тавил оруулах багана олдсонгүй.\n\nHeaders: ${headers.join(", ")}\nViewHeaders: ${viewHeaders.join(", ")}\n\nConsole-оос дэлгэрэнгүй мэдээлэл харах.`);
+  return;
+} else {
+  debugLog("IP sheet байна, 'Өөрчлөлтүүд' багана шаардлагагүй");
+  // IP sheet-ийн тохиолдолд dummy index ашиглах (хэрэглэхгүй)
+  finalOorchloltColIndex = -1;
+}
+  }
+}
+
+// finalOorchloltColIndex-ийг ашиглах
+const oorchloltColIndexToUse = finalOorchloltColIndex;
+
+// IP sheet-ийн тохиолдолд "Өөрчлөлтүүд" багана шаардлагагүй
+const selectedSheetNameCheck = sheetSelect.value || "";
+const isIPSheetCheck = /IP/i.test(selectedSheetNameCheck);
+
+if (isIPSheetCheck) {
+  debugLog("IP sheet байна, 'Өөрчлөлтүүд' багана шаардлагагүй");
+} else {
+  debugLog("Өөрчлөлтүүд багана олдлоо:", {
+index: oorchloltColIndexToUse,
+header: oorchloltColIndexToUse >= 0 ? headers[oorchloltColIndexToUse] : "Олдсонгүй",
+headers,
+viewHeaders
+  });
+}
+
+const editableInputs = document.querySelectorAll('.editable-input');
+const inputValues = new Map();
+editableInputs.forEach(input => {
+  const rowIndex = parseInt(input.getAttribute('data-row'));
+  const field = input.getAttribute('data-field');
+  const value = input.value.trim();
+  if (rowIndex !== null && field) {
+const key = `${rowIndex}_${field}`;
+inputValues.set(key, value);
+  }
+});
+
+// Footer мөрүүдийн "Тавил оруулах" баганад хоосон байгаа тохиолдолд хадгалж болохуйц болгох
+// Validation-ийг устгасан - хоосон байгаа тохиолдолд мөн хадгалж болно
+
+// Sheet name олох - Google Sheets API-аас бодит sheet name авах
+// Одоогийн сонгосон sheet-ийн нэрийг авах
+const selectedSheetName = sheetSelect.value;
+if (!selectedSheetName) {
+  showError("Sheet сонгогдоогүй байна.");
+  return;
+}
+
+// Sheet name -> GID mapping-оос одоогийн sheet-ийн GID-ийг олох
+let sheetName = selectedSheetName;
+let currentSheetGid = sheetNameToGidMap[selectedSheetName] || googleSheetGid;
+
+if (sheetNameToGidMap[selectedSheetName]) {
+  debugLog(`Сонгосон sheet: "${selectedSheetName}" -> GID ${currentSheetGid} (mapping-оос)`);
+} else {
+  debugWarn(`"${selectedSheetName}" sheet mapping-д олдсонгүй, default GID ашиглаж байна: ${currentSheetGid}`);
+  
+  // Mapping-д байхгүй бол metadata-аас олох
+  try {
+const metadataResponse = await window.gapi.client.sheets.spreadsheets.get({
+  spreadsheetId: googleSheetId
+});
+
+if (metadataResponse.status === 200 && metadataResponse.result.sheets) {
+  const targetSheet = metadataResponse.result.sheets.find(sheet => {
+return sheet.properties.title === selectedSheetName;
+  });
+  
+  if (targetSheet) {
+currentSheetGid = targetSheet.properties.sheetId.toString();
+sheetNameToGidMap[selectedSheetName] = currentSheetGid; // Mapping-д хадгалах
+debugLog(`Сонгосон sheet metadata-аас олдлоо: "${sheetName}" (GID: ${currentSheetGid})`);
+  }
+}
+  } catch (metadataErr) {
+debugWarn("Spreadsheet metadata авахад алдаа гарлаа:", metadataErr);
+  }
+}
+
+// Sheet name байхгүй бол fallback (зөвхөн API-аас олдохгүй тохиолдолд)
+if (!sheetName || sheetName.trim() === '') {
+  const sheets = workbook?.SheetNames || (workbook ? Object.keys(workbook.Sheets) : []);
+  if (sheets.length > 0) {
+sheetName = sheets[0];
+debugLog("Sheet name байхгүй байсан, эхний sheet ашиглаж байна:", sheetName);
+  } else {
+showError("Sheet нэр олдсонгүй. Sheet сонгоно уу.");
+return;
+  }
+}
+
+// Sheet name-ийг хадгалах (escape хийхээс өмнө) - API-аас ирсэн зөв sheet name
+const originalSheetName = sheetName;
+debugLog("Sheet name (API-аас ирсэн):", originalSheetName);
+
+// Sheet name-д тусгай тэмдэгт байвал escape хийх (Google Sheets API-д шаардлагатай)
+// Зөвхөн зай, single quote, эсвэл ! байвал escape хийх
+// ВАЖНО: Cyrillic тэмдэгтүүдийг өөрчлөхгүй!
+debugLog("Escape хийхээс өмнө sheetName:", sheetName, "Type:", typeof sheetName, "Length:", sheetName.length, "Char codes:", Array.from(sheetName).map(c => c.charCodeAt(0)));
+
+let escapedSheetName = sheetName;
+if (sheetName.includes(' ') || sheetName.includes("'") || sheetName.includes('!')) {
+  escapedSheetName = `'${sheetName.replace(/'/g, "''")}'`;
+  debugLog("Escape хийсэн:", escapedSheetName);
+} else {
+  debugLog("Escape хийх шаардлагагүй, sheetName-ийг шууд ашиглаж байна");
+}
+
+debugLog("Эцсийн escapedSheetName:", escapedSheetName, "Char codes:", Array.from(escapedSheetName).map(c => c.charCodeAt(0)));
+
+// Column letter-ийг тооцоолох (A, B, C, ..., Z, AA, AB, ...)
+const getColumnLetter = (colIndex) => {
+  let result = '';
+  let num = colIndex;
+  while (num >= 0) {
+result = String.fromCharCode(65 + (num % 26)) + result;
+num = Math.floor(num / 26) - 1;
+  }
+  return result;
+};
+
+const colLetter = getColumnLetter(oorchloltColIndexToUse);
+// Header мөрийн дараа эхлэх
+// headerRowIndex нь Google Sheets дээрх header мөрийн дугаар (1-based)
+const startRow = headerRowIndex + 1; // Header-ийн дараа эхлэх
+const endRow = startRow + sheetData.length - 1; // Сүүлийн мөр
+const range = `${escapedSheetName}!${colLetter}${startRow}:${colLetter}${endRow}`;
+
+debugLog("Range тооцоолол:", {
+  sheetNameFromDropdown: sheetSelect.value,
+  sheetNameFromAPI: originalSheetName,
+  escapedSheetName: escapedSheetName,
+  colLetter,
+  oorchloltColIndex: oorchloltColIndexToUse,
+  headerRowIndex,
+  startRow,
+  endRow,
+  range,
+  sheetDataLength: sheetData.length,
+  headers: headers,
+  googleSheetGid: googleSheetGid
+});
+
+// "Тавилын утга" баганын индексийг олох (fallback утга авахад ашиглана)
+let tavlynUtgaColIndex = headers.findIndex(h => {
+  const headerStr = (h || "").toString().trim();
+  return /тавилын утга/i.test(headerStr);
+});
+
+debugLog("Тавилын утга багана шалгалт:", {
+  tavlynUtgaColIndex,
+  headers,
+  headersDetailed: headers.map((h, i) => ({ 
+index: i, 
+name: h, 
+test: /тавилын утга/i.test(h || "") 
+  }))
+});
+
+if (tavlynUtgaColIndex < 0) {
+  // Fallback: viewHeaders-ээс олох
+  const viewTavlynUtgaColIndex = viewHeaders.findIndex(h => {
+const headerStr = (h || "").toString().trim();
+return /тавилын утга/i.test(headerStr);
+  });
+  
+  if (viewTavlynUtgaColIndex >= 0) {
+const viewHeaderName = viewHeaders[viewTavlynUtgaColIndex];
+const matchedHeaderIndex = headers.findIndex(h => h === viewHeaderName);
+if (matchedHeaderIndex >= 0) {
+  tavlynUtgaColIndex = matchedHeaderIndex;
+  debugLog("ViewHeaders-ээс 'Тавилын утга' олдлоо (headers-д match):", tavlynUtgaColIndex);
+} else if (viewTavlynUtgaColIndex < headers.length) {
+  tavlynUtgaColIndex = viewTavlynUtgaColIndex;
+  debugLog("ViewHeaders-ийн index-ийг ашиглаж байна:", tavlynUtgaColIndex);
+}
+  }
+  
+  if (tavlynUtgaColIndex < 0) {
+// IP sheet-ийн тохиолдолд "Тавилын утга" багана шаардлагагүй
+// Sheet-ийн нэрэнд "IP" байгаа эсэхийг шалгах
+const sheetNameForCheck = sheetSelect.value || "";
+const isIPSheetForWarning = /IP/i.test(sheetNameForCheck);
+if (!isIPSheetForWarning) {
+  debugWarn("'Тавилын утга' багана олдсонгүй! Хадгалах логик зөв ажиллахгүй байж магадгүй.");
+}
+  }
+}
+
+// Sheet-ийн нэрэнд "IP" байгаа эсэхийг шалгах (selectedSheetName дээрхээс ашиглана)
+const isIPSheet = /IP/i.test(selectedSheetName);
+
+// Versioning систем: "Өөрчлөлт 1", "Өөрчлөлт 2" гэх мэт багана үүсгэх
+// Гэхдээ IP sheet бол versioning хийхгүй
+let newOorchloltColName = null;
+if (!isIPSheet) {
+  // Эхлээд одоогийн "Өөрчлөлт" багануудыг олох
+  const existingOorchloltCols = headers
+.map((h, idx) => ({ name: h, index: idx }))
+.filter(({ name }) => /^өөрчлөлт\s*\d*$/i.test(name.trim()));
+  
+  // Дараагийн version дугаарыг олох
+  let nextVersion = 1;
+  if (existingOorchloltCols.length > 0) {
+const versionNumbers = existingOorchloltCols
+  .map(({ name }) => {
+const match = name.match(/\d+/);
+return match ? parseInt(match[0]) : 0;
+  })
+  .filter(n => n > 0);
+if (versionNumbers.length > 0) {
+  nextVersion = Math.max(...versionNumbers) + 1;
+}
+  }
+  
+  newOorchloltColName = `Өөрчлөлт ${nextVersion}`;
+  debugLog("Versioning:", {
+existingOorchloltCols: existingOorchloltCols.map(c => c.name),
+nextVersion,
+newOorchloltColName
+  });
+} else {
+  debugLog("IP sheet байна, versioning хийхгүй");
+}
+
+// Утгуудыг бэлтгэх - "Тавил оруулах" баганад утга байгаа нүднүүдэд шинэ version ашиглах
+// IP sheet биш бол энэ логикийг ашиглах
+if (!isIPSheet) {
+  // Эхлээд DOM-оос бүх input field-үүдийн утгыг авах
+  const allInputs = document.querySelectorAll('input.editable-input[data-row][data-field]');
+  debugLog("DOM-оос input field-үүдийг олж байна:", {
+inputsCount: allInputs.length,
+oorchloltColIndexToUse,
+oorchloltHeaderName: oorchloltColIndexToUse >= 0 ? headers[oorchloltColIndexToUse] : "N/A"
+  });
+  
+  // DOM-оос утгуудыг авах
+  allInputs.forEach(input => {
+const rowIndex = parseInt(input.getAttribute('data-row'));
+const field = input.getAttribute('data-field');
+const value = input.value.trim();
+if (rowIndex !== null && field) {
+  const key = `${rowIndex}_${field}`;
+  inputValues.set(key, value);
+  debugLog("Input value хадгалж байна:", { key, value, rowIndex, field });
+}
+  });
+  
+  debugLog("InputValues Map:", {
+size: inputValues.size,
+entries: Array.from(inputValues.entries()).slice(0, 5)
+  });
+}
+
+// IP sheet биш бол "Тавил оруулах" утгуудыг бэлтгэх
+const tavilOruulahValues = !isIPSheet && oorchloltColIndexToUse >= 0 ? sheetData.map((row, idx) => {
+  // Эхлээд editable input field-ээс утга авах
+  const inputKey = `${row.__rowIndex}_${headers[oorchloltColIndexToUse]}`;
+  let tavilOruulahVal = inputValues.get(inputKey) || "";
+  
+  debugLog(`Row ${idx} (${row.__rowIndex}): "Тавил оруулах" утга авах:`, {
+inputKey,
+fromInputValues: tavilOruulahVal,
+fromSheetData: row[headers[oorchloltColIndexToUse]] || "",
+headerName: headers[oorchloltColIndexToUse]
+  });
+  
+  // Хэрэв input field-ээс утга байхгүй бол, DOM-оос шууд авах
+  if (!tavilOruulahVal || tavilOruulahVal.trim() === "") {
+const inputElement = document.querySelector(`input.editable-input[data-row="${row.__rowIndex}"][data-field="${headers[oorchloltColIndexToUse]}"]`);
+if (inputElement) {
+  tavilOruulahVal = inputElement.value.trim();
+  debugLog(`Row ${idx}: DOM-оос шууд утга авлаа: "${tavilOruulahVal}"`);
+}
+  }
+  
+  // Хэрэв input field-ээс утга байхгүй бол, анхны sheetData-аас авах
+  if (!tavilOruulahVal || tavilOruulahVal.trim() === "") {
+tavilOruulahVal = row[headers[oorchloltColIndexToUse]] || "";
+debugLog(`Row ${idx}: sheetData-аас утга авлаа: "${tavilOruulahVal}"`);
+  }
+  
+  // Хэрэв "Тавил оруулах" баганад утга байхгүй бол, "Тавилын утга" баганын утгыг ашиглах
+  if (!tavilOruulahVal || tavilOruulahVal.toString().trim() === "") {
+if (tavlynUtgaColIndex >= 0) {
+  const tavlynUtgaVal = row[headers[tavlynUtgaColIndex]] || "";
+  if (tavlynUtgaVal && tavlynUtgaVal.toString().trim() !== "") {
+tavilOruulahVal = tavlynUtgaVal;
+debugLog(`Row ${idx}: "Тавил оруулах" хоосон байна, "Тавилын утга"-аас утга авлаа: "${tavilOruulahVal}"`);
+  }
+}
+  }
+  
+  return tavilOruulahVal;
+}) : [];
+
+debugLog("Тавил оруулах утгууд:", {
+  count: tavilOruulahValues.length,
+  firstFew: tavilOruulahValues.slice(0, 5)
+});
+
+// "Тавилын утга" баганын баруун талын (арын) багний индексийг олох
+const tavlynUtgaRightColIndex = tavlynUtgaColIndex >= 0 ? tavlynUtgaColIndex + 1 : -1;
+
+debugLog("Тавилын утга баганын баруун талын багана:", {
+  tavlynUtgaColIndex,
+  tavlynUtgaRightColIndex,
+  rightColHeader: tavlynUtgaRightColIndex >= 0 && tavlynUtgaRightColIndex < headers.length ? headers[tavlynUtgaRightColIndex] : "Олдсонгүй",
+  headersLength: headers.length,
+  headers
+});
+
+// "Тавилын утга" баганын утгуудыг бэлтгэх
+// "Тавилын утга" баганын баруун талын (арын) багний утгыг ашиглах
+const tavlynUtgaValues = sheetData.map((row, idx) => {
+  // Эхлээд "Тавилын утга" баганын баруун талын багний утгыг авах
+  if (tavlynUtgaRightColIndex >= 0 && tavlynUtgaRightColIndex < headers.length) {
+const rightColVal = row[headers[tavlynUtgaRightColIndex]] || "";
+if (rightColVal && rightColVal.toString().trim() !== "") {
+  debugLog(`Row ${idx}: "Тавилын утга" баганын баруун талын багний утга: "${rightColVal}"`);
+  return rightColVal;
+}
+  }
+  
+  // Хэрэв баруун талын багний утга байхгүй бол, "Тавил оруулах" баганын утгыг ашиглах
+  const tavilOruulahVal = tavilOruulahValues[idx] || "";
+  if (tavilOruulahVal && tavilOruulahVal.toString().trim() !== "") {
+return tavilOruulahVal;
+  }
+  
+  // Хэрэв "Тавил оруулах" баганад утга байхгүй бол, анхны "Тавилын утга" баганын утгыг ашиглах
+  if (tavlynUtgaColIndex >= 0) {
+return row[headers[tavlynUtgaColIndex]] || "";
+  }
+  
+  return "";
+});
+
+// "Өөрчлөлт N" баганын утгуудыг бэлтгэх
+// "Тавилын утга" баганын баруун талын (арын) багний утгыг ашиглах
+const oorchloltValues = sheetData.map((row, idx) => {
+  // Эхлээд "Тавилын утга" баганын баруун талын багний утгыг авах
+  if (tavlynUtgaRightColIndex >= 0 && tavlynUtgaRightColIndex < headers.length) {
+const rightColVal = row[headers[tavlynUtgaRightColIndex]] || "";
+if (rightColVal && rightColVal.toString().trim() !== "") {
+  return rightColVal;
+}
+  }
+  
+  // Хэрэв баруун талын багний утга байхгүй бол, "Тавил оруулах" баганын утгыг ашиглах
+  const tavilOruulahVal = tavilOruulahValues[idx] || "";
+  if (tavilOruulahVal && tavilOruulahVal.toString().trim() !== "") {
+return tavilOruulahVal;
+  }
+  
+  // Хэрэв "Тавил оруулах" баганад утга байхгүй бол, анхны "Тавилын утга" баганын утгыг ашиглах
+  if (tavlynUtgaColIndex >= 0) {
+return row[headers[tavlynUtgaColIndex]] || "";
+  }
+  
+  return "";
+});
+
+debugLog("Хадгалах утгууд:", {
+  tavlynUtgaValuesCount: tavlynUtgaValues.length,
+  oorchloltValuesCount: oorchloltValues.length,
+  tavlynUtgaFirstFew: tavlynUtgaValues.slice(0, 5),
+  oorchloltFirstFew: oorchloltValues.slice(0, 5)
+});
+
+try {
+  // Google Sheets дээр хадгалах - Versioning систем
+  debugLog("Google Sheets дээр хадгалах эхэлж байна (Versioning)...", {
+spreadsheetId: googleSheetId,
+tavlynUtgaColIndex,
+newOorchloltColName,
+tavilOruulahValuesCount: tavilOruulahValues.length,
+tavlynUtgaValuesCount: tavlynUtgaValues.length
+  });
+  
+  // 1. IP sheet биш бол "Тавилын утга" баганыг шинэчлэх
+  let totalUpdatedCells = 0;
+  let totalUpdatedRows = 0;
+  
+  if (!isIPSheet && tavlynUtgaColIndex >= 0) {
+const tavlynUtgaColLetter = getColumnLetter(tavlynUtgaColIndex);
+const tavlynUtgaRange = `${escapedSheetName}!${tavlynUtgaColLetter}${startRow}:${tavlynUtgaColLetter}${endRow}`;
+const tavlynUtgaUpdateValues = tavlynUtgaValues.map(v => [v]);
+
+debugLog("Тавилын утга баганыг шинэчлэж байна:", {
+  range: tavlynUtgaRange,
+  colIndex: tavlynUtgaColIndex,
+  colLetter: tavlynUtgaColLetter,
+  valuesCount: tavlynUtgaUpdateValues.length,
+  firstFewValues: tavlynUtgaUpdateValues.slice(0, 5)
+});
+
+try {
+  const tavlynUtgaResponse = await window.gapi.client.sheets.spreadsheets.values.update({
+spreadsheetId: googleSheetId,
+range: tavlynUtgaRange,
+valueInputOption: 'USER_ENTERED',
+resource: {
+  values: tavlynUtgaUpdateValues
+}
+  });
+  
+  if (tavlynUtgaResponse && tavlynUtgaResponse.status === 200) {
+totalUpdatedCells += tavlynUtgaResponse.result?.updatedCells || 0;
+totalUpdatedRows += tavlynUtgaResponse.result?.updatedRows || 0;
+debugLog("✅ Тавилын утга багана шинэчлэгдлээ:", {
+  updatedCells: tavlynUtgaResponse.result?.updatedCells,
+  updatedRows: tavlynUtgaResponse.result?.updatedRows,
+  range: tavlynUtgaRange
+});
+  } else {
+debugError("❌ Тавилын утга багана шинэчлэхэд алдаа:", tavlynUtgaResponse);
+  }
+} catch (tavlynUtgaErr) {
+  debugError("❌ Тавилын утга багана шинэчлэхэд алдаа (catch):", tavlynUtgaErr);
+}
+  } else if (isIPSheet) {
+debugLog("IP sheet байна, 'Тавилын утга' баганыг шинэчлэхгүй (зөвхөн өөрчлөсөн нүднүүдэд л хадгалах)");
+  } else {
+debugWarn("⚠️ 'Тавилын утга' багана олдсонгүй, шинэчлэхгүй байна!");
+  }
+  
+  // 2. IP sheet биш бол "Өөрчлөлт N" багана нэмэх (эсвэл шинэчлэх)
+  if (!isIPSheet && newOorchloltColName) {
+// Эхлээд header мөрөнд "Өөрчлөлт N" багана байгаа эсэхийг шалгах
+const headerRange = `${escapedSheetName}!${getColumnLetter(headers.length)}${headerRowIndex}:${getColumnLetter(headers.length + 10)}${headerRowIndex}`;
+
+// Header мөрийг унших (одоогийн сонгосон sheet-аас)
+const headerResponse = await window.gapi.client.sheets.spreadsheets.values.get({
+  spreadsheetId: googleSheetId,
+  range: `${escapedSheetName}!${headerRowIndex}:${headerRowIndex}`
+});
+
+let headerRow = [];
+if (headerResponse && headerResponse.status === 200 && headerResponse.result.values) {
+  headerRow = headerResponse.result.values[0] || [];
+}
+
+// Бүх "Өөрчлөлт N" багануудыг олох (headerRow-оос)
+const allOorchloltCols = headerRow
+  .map((h, idx) => ({ name: h, index: idx }))
+  .filter(({ name }) => name && /^өөрчлөлт\s+\d+$/i.test(name.toString().trim()));
+
+debugLog("Бүх 'Өөрчлөлт N' баганууд:", allOorchloltCols);
+
+// Хамгийн сүүлийн "Өөрчлөлт N" баганыг олох
+let lastOorchloltColIndex = -1;
+if (allOorchloltCols.length > 0) {
+  // Version дугаараар эрэмбэлэх
+  const sortedCols = allOorchloltCols.sort((a, b) => {
+const aMatch = a.name.toString().match(/\d+/);
+const bMatch = b.name.toString().match(/\d+/);
+const aNum = aMatch ? parseInt(aMatch[0]) : 0;
+const bNum = bMatch ? parseInt(bMatch[0]) : 0;
+return aNum - bNum;
+  });
+  lastOorchloltColIndex = sortedCols[sortedCols.length - 1].index;
+  debugLog("Хамгийн сүүлийн 'Өөрчлөлт N' багана:", {
+index: lastOorchloltColIndex,
+name: headerRow[lastOorchloltColIndex]
+  });
+}
+
+// Шинэ "Өөрчлөлт N" багана үүсгэх
+let oorchloltColIndexInSheet = -1;
+
+// Хэрэв "Өөрчлөлт N" багана байгаа бол, хамгийн сүүлийнх нь дараа нэмэх
+// Хэрэв байхгүй бол, headers.length байрлалд нэмэх
+const insertColumnIndex = lastOorchloltColIndex >= 0 
+  ? lastOorchloltColIndex + 1 
+  : headers.length;
+
+debugLog("Шинэ багана нэмэх байрлал:", {
+  insertColumnIndex,
+  lastOorchloltColIndex,
+  headersLength: headers.length,
+  newOorchloltColName
+});
+
+// Багана нэмэх (insert column)
+const insertColumnRequest = {
+  insertDimension: {
+range: {
+  sheetId: parseInt(currentSheetGid) || 0,
+  dimension: "COLUMNS",
+  startIndex: insertColumnIndex,
+  endIndex: insertColumnIndex + 1
+},
+inheritFromBefore: false
+  }
+};
+
+const batchUpdateResponse = await window.gapi.client.sheets.spreadsheets.batchUpdate({
+  spreadsheetId: googleSheetId,
+  resource: {
+requests: [insertColumnRequest]
+  }
+});
+
+if (batchUpdateResponse && batchUpdateResponse.status === 200) {
+  debugLog("✅ Шинэ багана нэмэгдлээ:", {
+insertColumnIndex,
+newOorchloltColName
+  });
+  oorchloltColIndexInSheet = insertColumnIndex;
+} else {
+  debugError("❌ Багана нэмэхэд алдаа:", batchUpdateResponse);
+  // Fallback: headers.length байрлалд нэмэх
+  oorchloltColIndexInSheet = headers.length;
+}
+
+// Header мөрөнд "Өөрчлөлт N" нэмэх/шинэчлэх
+const newHeaderColLetter = getColumnLetter(oorchloltColIndexInSheet);
+const newHeaderRange = `${escapedSheetName}!${newHeaderColLetter}${headerRowIndex}`;
+
+debugLog("Header мөрөнд 'Өөрчлөлт N' нэмэж байна:", {
+  range: newHeaderRange,
+  colIndex: oorchloltColIndexInSheet,
+  colLetter: newHeaderColLetter,
+  headerName: newOorchloltColName
+});
+
+await window.gapi.client.sheets.spreadsheets.values.update({
+  spreadsheetId: googleSheetId,
+  range: newHeaderRange,
+  valueInputOption: 'USER_ENTERED',
+  resource: {
+values: [[newOorchloltColName]]
+  }
+});
+
+// "Өөрчлөлт N" баганын утгуудыг хадгалах
+const oorchloltRange = `${escapedSheetName}!${newHeaderColLetter}${startRow}:${newHeaderColLetter}${endRow}`;
+const oorchloltUpdateValues = oorchloltValues.map(v => [v]);
+
+debugLog("Өөрчлөлт N баганыг хадгалах:", {
+  range: oorchloltRange,
+  colIndex: oorchloltColIndexInSheet,
+  colLetter: newHeaderColLetter,
+  valuesCount: oorchloltUpdateValues.length,
+  firstFewValues: oorchloltUpdateValues.slice(0, 5),
+  oorchloltValuesFirstFew: oorchloltValues.slice(0, 5),
+  tavilOruulahValuesFirstFew: tavilOruulahValues.slice(0, 5)
+});
+
+const oorchloltResponse = await window.gapi.client.sheets.spreadsheets.values.update({
+  spreadsheetId: googleSheetId,
+  range: oorchloltRange,
+  valueInputOption: 'USER_ENTERED',
+  resource: {
+values: oorchloltUpdateValues
+  }
+});
+
+if (oorchloltResponse && oorchloltResponse.status === 200) {
+  totalUpdatedCells += oorchloltResponse.result?.updatedCells || 0;
+  totalUpdatedRows += oorchloltResponse.result?.updatedRows || 0;
+  debugLog("Өөрчлөлт N багана хадгалагдлаа:", oorchloltResponse.result);
+}
+  } else if (isIPSheet) {
+// IP sheet: зөвхөн өөрчлөсөн нүднүүдэд л хадгалах
+debugLog("IP sheet байна, зөвхөн өөрчлөсөн нүднүүдэд л хадгалах");
+
+// Бүх editable input field-үүдийн утгыг авах
+const allEditableInputs = document.querySelectorAll('input.editable-input[data-row][data-field]');
+const changedCells = [];
+
+debugLog("IP sheet хадгалах эхлэл:", {
+  allEditableInputsCount: allEditableInputs.length,
+  sheetDataCount: sheetData.length,
+  headers: headers
+});
+
+allEditableInputs.forEach((input, inputIdx) => {
+  const rowIndex = parseInt(input.getAttribute('data-row'));
+  const field = input.getAttribute('data-field');
+  const newValue = input.value;
+  
+  // Анхны утгыг data-initial-value attribute-оос олох (илүү найдвартай)
+  let originalValue = input.getAttribute('data-initial-value');
+  if (originalValue === null || originalValue === undefined) {
+// Fallback: sheetData-аас олох
+const row = sheetData.find(r => r.__rowIndex === rowIndex);
+if (row) {
+  originalValue = row[field];
+  if (originalValue === null || originalValue === undefined) {
+originalValue = "";
+  } else {
+originalValue = String(originalValue);
+  }
+} else {
+  originalValue = "";
+}
+  } else {
+originalValue = String(originalValue);
+  }
+  
+  // Шинэ утгыг string болгох
+  const newValueStr = String(newValue || "");
+  
+  // Debug: эхний хэдэн input-ийг console-д хэвлэх
+  if (inputIdx < 5) {
+debugLog(`Input ${inputIdx}: Row ${rowIndex}, Field "${field}", Original: "${originalValue}", New: "${newValueStr}", Same: ${newValueStr === originalValue}`);
+  }
+  
+  // Утга өөрчлөгдсөн эсэхийг шалгах
+  if (newValueStr !== originalValue) {
+// Баганын индексийг олох
+const colIndex = headers.findIndex(h => h === field);
+debugLog(`Өөрчлөлт илрэлээ: Row ${rowIndex}, Field "${field}", Col ${colIndex}, "${originalValue}" -> "${newValueStr}"`);
+
+if (colIndex >= 0) {
+  // Эхний 3 баганаас бусад багануудыг хадгалах
+  if (colIndex >= 3) {
+changedCells.push({
+  rowIndex: rowIndex,
+  colIndex: colIndex,
+  field: field,
+  newValue: newValueStr,
+  originalValue: originalValue
+});
+debugLog(`✅ Өөрчлөлт нэмэгдлээ: Row ${rowIndex}, Field "${field}", "${originalValue}" -> "${newValueStr}"`);
+  } else {
+debugLog(`⚠️ Эхний 3 багана (Col ${colIndex}), хадгалахгүй`);
+  }
+} else {
+  debugLog(`❌ Багана олдсонгүй: Field "${field}"`);
+}
+  }
+});
+
+debugLog("Өөрчлөгдсөн нүднүүд:", changedCells);
+
+// Өөрчлөгдсөн нүднүүдэд л хадгалах
+if (changedCells.length > 0) {
+  // Баганаар бүлэглэх
+  const cellsByColumn = {};
+  changedCells.forEach(cell => {
+if (!cellsByColumn[cell.colIndex]) {
+  cellsByColumn[cell.colIndex] = [];
+}
+cellsByColumn[cell.colIndex].push(cell);
+  });
+  
+  // Баганаар бүлэглэх бөгөөд мөрөөр эрэмблэх
+  for (const [colIndex, cells] of Object.entries(cellsByColumn)) {
+const colIdx = parseInt(colIndex);
+const colLetter = getColumnLetter(colIdx);
+
+// Нүднүүдийг мөрөөр эрэмблэх
+const sortedCells = cells.sort((a, b) => {
+  const aRowIdx = sheetData.findIndex(r => r.__rowIndex === a.rowIndex);
+  const bRowIdx = sheetData.findIndex(r => r.__rowIndex === b.rowIndex);
+  return aRowIdx - bRowIdx;
+});
+
+// Мөрүүдийг олох
+const rows = sortedCells.map(cell => {
+  const rowIdx = sheetData.findIndex(r => r.__rowIndex === cell.rowIndex);
+  return {
+googleSheetRow: startRow + rowIdx,
+value: cell.newValue,
+originalValue: cell.originalValue
+  };
+});
+
+debugLog(`Багана ${colLetter} (${colIdx}) хадгалах:`, {
+  cellsCount: rows.length,
+  rows: rows.map(r => `row ${r.googleSheetRow}: "${r.originalValue}" -> "${r.value}"`)
+});
+
+// values.update ашиглах (илүү хялбар)
+const rangeValues = rows.map(r => [r.value]);
+const range = `${escapedSheetName}!${colLetter}${rows[0].googleSheetRow}:${colLetter}${rows[rows.length - 1].googleSheetRow}`;
+
+try {
+  const updateResponse = await window.gapi.client.sheets.spreadsheets.values.update({
+spreadsheetId: googleSheetId,
+range: range,
+valueInputOption: 'USER_ENTERED',
+resource: {
+  values: rangeValues
+}
+  });
+  
+  if (updateResponse && updateResponse.status === 200) {
+totalUpdatedCells += updateResponse.result?.updatedCells || rows.length;
+totalUpdatedRows += updateResponse.result?.updatedRows || new Set(rows.map(r => r.googleSheetRow)).size;
+debugLog(`✅ Багана ${colLetter} (${colIdx}) хадгалагдлаа: ${rows.length} нүд, range: ${range}`);
+  } else {
+debugError(`❌ Багана ${colLetter} хадгалахад алдаа:`, updateResponse);
+  }
+} catch (updateErr) {
+  debugError(`❌ Багана ${colLetter} хадгалахад алдаа (catch):`, updateErr);
+  // Fallback: нүд бүрийг тусад нь хадгалах
+  for (const row of rows) {
+try {
+  const singleCellRange = `${escapedSheetName}!${colLetter}${row.googleSheetRow}`;
+  const singleUpdateResponse = await window.gapi.client.sheets.spreadsheets.values.update({
+spreadsheetId: googleSheetId,
+range: singleCellRange,
+valueInputOption: 'USER_ENTERED',
+resource: {
+  values: [[row.value]]
+}
+  });
+  
+  if (singleUpdateResponse && singleUpdateResponse.status === 200) {
+totalUpdatedCells += 1;
+debugLog(`✅ Нүд ${singleCellRange} хадгалагдлаа: "${row.value}"`);
+  }
+} catch (singleErr) {
+  debugError(`❌ Нүд ${colLetter}${row.googleSheetRow} хадгалахад алдаа:`, singleErr);
+}
+  }
+}
+  }
+} else {
+  debugLog("Өөрчлөгдсөн нүд олдсонгүй");
+  setStatus("⚠️ Өөрчлөлт оруулаагүй байна. Хадгалах шаардлагагүй.");
+  return;
+}
+  }
+  
+  const updateResponse = {
+status: 200,
+result: {
+  updatedCells: totalUpdatedCells,
+  updatedRows: totalUpdatedRows,
+  updatedColumns: 1
+}
+  };
+
+  debugLog("Google Sheets update response:", updateResponse);
+  debugLog("IP sheet хадгалах үр дүн:", {
+totalUpdatedCells,
+totalUpdatedRows,
+isIPSheet: true
+  });
+  
+  // Response-ийг нарийвчлан шалгах
+  if (updateResponse && updateResponse.status === 200) {
+const updatedCells = updateResponse.result?.updatedCells || 0;
+const updatedRows = updateResponse.result?.updatedRows || 0;
+const updatedColumns = updateResponse.result?.updatedColumns || 0;
+
+debugLog("Хадгалах амжилттай:", {
+  status: updateResponse.status,
+  updatedCells,
+  updatedRows,
+  updatedColumns,
+  isIPSheet: isIPSheet
+});
+
+// Амжилттай мэдээлэл харуулах - товч, ойлгомжтой
+setStatus(`✅ АМЖИЛТТАЙ ХАДГАЛАГДЛАА!\n\nХадгалсан: ${updatedRows} мөр, ${updatedCells} нүд`);
+
+// Loading overlay хаах (амжилттай хадгалагдсан)
+hideLoading();
+
+// Автоматаар Google Sheets-ээс дахин унших (одоогийн sheet-ийг хадгалж)
+const currentSheetName = sheetSelect.value; // Одоогийн сонгосон sheet-ийг хадгалах
+setTimeout(async () => {
+  try {
+await loadGoogleSheets();
+// Одоогийн сонгосон sheet-ийг дахин сонгох
+if (currentSheetName && sheetSelect) {
+  // Sheet dropdown-ийг бэлэн болоход хүлээх
+  setTimeout(() => {
+const optionExists = Array.from(sheetSelect.options).some(opt => opt.value === currentSheetName);
+if (optionExists) {
+  sheetSelect.value = currentSheetName;
+  loadSheet(currentSheetName);
+  debugLog(`✅ Sheet сэргээлээ: "${currentSheetName}"`);
+} else {
+  debugWarn(`Sheet "${currentSheetName}" олдсонгүй, эхний sheet ашиглаж байна`);
+}
+  }, 100);
+}
+setStatus(`✅ АМЖИЛТТАЙ ХАДГАЛАГДЛАА!\n\nХадгалсан: ${updatedRows} мөр, ${updatedCells} нүд`);
+hideLoading(); // Refresh хийгдсэний дараа loading overlay хаах
+  } catch (refreshErr) {
+debugError("Автоматаар refresh хийхэд алдаа:", refreshErr);
+setStatus(`✅ АМЖИЛТТАЙ ХАДГАЛАГДЛАА!\n\nХадгалсан: ${updatedRows} мөр, ${updatedCells} нүд`);
+hideLoading(); // Refresh алдаа гарсан тохиолдолд ч loading overlay хаах
+  }
+}, 1000); // 1 секунд хүлээгээд refresh хийх
+  } else {
+// Status 200 биш бол алдаа
+const errorMsg = updateResponse?.statusText || updateResponse?.result?.error?.message || 'Unknown error';
+debugError("Хадгалах алдаа (status !== 200):", {
+  status: updateResponse?.status,
+  statusText: updateResponse?.statusText,
+  error: updateResponse?.result?.error
+});
+showError({ message: errorMsg });
+  }
+} catch (updateErr) {
+  debugError("Google Sheets update алдаа (catch block):", updateErr);
+  
+  // Алдааны төрлөөр дэлгэрэнгүй мэдээлэл харуулах
+  const errorStatus = updateErr.status || (updateErr.result?.error?.code);
+  const errorMessage = updateErr.result?.error?.message || updateErr.message || 'Unknown error';
+  
+  debugError("Алдааны дэлгэрэнгүй:", {
+status: errorStatus,
+message: errorMessage,
+error: updateErr.result?.error,
+fullError: updateErr
+  });
+  
+  if (errorStatus === 403 || (updateErr.result && updateErr.result.error && updateErr.result.error.code === 403)) {
+// 403 Forbidden алдаа
+showError(`❌ АМЖИЛТГҮЙ: ЭРХ ХҮРЭХГҮЙ\n\nШийдэл:\n1. Google Sheets → Share → Restricted байгаа эсэхийг шалгах\n2. Нэвтэрсэн email-ийг Share дээр нэмэх (Share → Email нэмэх → "Editor" эрх өгөх)\n3. Хэрэв Restricted биш бол Share → "Editor" эрх өгөх`);
+  } else if (errorStatus === 400 || (updateErr.result && updateErr.result.error && updateErr.result.error.code === 400)) {
+// 400 Bad Request алдаа - range эсвэл утга буруу байна
+debugError("400 алдааны дэлгэрэнгүй:", {
+  error: updateErr.result?.error,
+  range: range,
+  sheetNameFromDropdown: sheetSelect.value,
+  actualSheetName: originalSheetName,
+  escapedSheetName: escapedSheetName,
+  colLetter: colLetter,
+  oorchloltColIndex: oorchloltColIndexToUse,
+  headerRowIndex: headerRowIndex,
+  startRow: startRow,
+  endRow: endRow,
+  sheetDataLength: sheetData.length,
+  headers: headers,
+  googleSheetGid: googleSheetGid
+});
+showError(`❌ АМЖИЛТГҮЙ: RANGE БУРУУ\n\nАлдаа: ${errorMessage}\n\nЗөвлөмж: Console-оос дэлгэрэнгүй мэдээлэл харах`);
+  } else {
+// Бусад алдаанууд
+showError(`❌ АМЖИЛТГҮЙ БОЛЛОО\n\nАлдаа: ${errorMessage}\n\nЗөвлөмж: Интернэт холболт, Google Sheets шалгах`);
+  }
+}
+} catch (performSaveErr) {
+  hideLoading(); // Алдаа гарсан тохиолдолд loading overlay хаах
+  debugError("performSave алдаа:", performSaveErr);
+  showError(`Google Sheets хадгалахад алдаа гарлаа:\n\n${performSaveErr?.message || performSaveErr}`);
+}
+};
+
+const tokenClient = google.accounts.oauth2.initTokenClient({
+  client_id: clientId,
+  scope: 'https://www.googleapis.com/auth/spreadsheets',
+  callback: async (response) => {
+if (response.error) {
+  showError(`OAuth алдаа: ${response.error}`);
+  return;
+}
+
+// Access token-ийг тохируулах
+window.gapi.client.setToken(response);
+debugLog("OAuth token авлаа (хадгалах)");
+
+// Хадгалах логикийг дуудах
+await performSave();
+  }
+});
+
+// Token авах - хэрэв token байгаа бол дахин нэвтрэх шаардлагагүй
+if (!currentToken || !currentToken.access_token) {
+  // Token байхгүй бол consent асуух
+  // prompt: 'select_account' - account сонгох (1 удаа), дараа нь cookie-д хадгалагдана, илүү хурдан
+  // prompt: 'consent' - баталгаажуулалт дахин асуух (олон цаг авна)
+  // prompt: '' - автоматаар ашиглах (token байгаа бол)
+  tokenClient.requestAccessToken({ prompt: 'select_account' });
+} else {
+  // Token байгаа бол шууд хадгалах логик руу орно
+  window.gapi.client.setToken(currentToken);
+  debugLog("Одоогийн OAuth token ашиглаж байна (дахь удаа нэвтрэх шаардлагагүй)");
+  
+  // Хадгалах логикийг шууд дуудах
+  await performSave();
+}
+  } catch (err) {
+debugError("Google Sheets хадгалах алдаа:", err);
+showError(`Google Sheets хадгалахад алдаа гарлаа:\n\n${err?.message || err}\n\nЗөвлөмж:\n1. Google Cloud Console → API & Services → Credentials → OAuth 2.0 Client ID үүсгэх\n2. Client ID-г оруулах`);
+  }
+});
+
+// Google Sheets URL-аас өгөгдөл унших функц (OAuth ашиглах)
+const loadGoogleSheets = async () => {
+  const url = googleSheetsUrlInput.value.trim();
+  if (!url) {
+showError("Google Sheets URL оруулна уу.");
+return;
+  }
+
+  // OAuth 2.0 Client ID шалгах
+  const clientId = googleApiKeyInput.value.trim();
+  if (!clientId) {
+showError("OAuth 2.0 Client ID оруулна уу.");
+return;
+  }
+
+  try {
+showLoading("Google Sheets уншиж байна...");
+clearTable();
+clearHistoryTable();
+
+// Google Sheets URL-аас Sheet ID болон GID олох
+let sheetId = null;
+let gid = "0"; // Default gid
+const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+if (match) {
+  sheetId = match[1];
+  googleSheetId = sheetId; // Хадгалах
+} else {
+  throw new Error("Google Sheets URL буруу байна. Жишээ: https://docs.google.com/spreadsheets/d/SHEET_ID/edit");
+}
+
+// GID олох (URL-д gid параметр байвал ашиглах)
+const gidMatch = url.match(/[?&#]gid=(\d+)/);
+if (gidMatch) {
+  gid = gidMatch[1];
+  googleSheetGid = gid; // Хадгалах
+  debugLog(`GID олдлоо: ${gid}`);
+} else {
+  googleSheetGid = "0"; // Default GID
+}
+
+// gapi client идэвхжүүлэх (хэрэв хийгдээгүй бол)
+if (!window.gapi || !window.gapi.client || !window.gapi.client.sheets) {
+  if (!window.gapi) {
+throw new Error("Google API library ачаалагдаагүй байна. Интернэт холболт шалгаарай.");
+  }
+  
+  await new Promise((resolve, reject) => {
+window.gapi.load('client', () => {
+  window.gapi.client.init({
+'discoveryDocs': ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
+'clientId': clientId
+  }).then(() => {
+debugLog("Google API client идэвхжүүлэгдлээ");
+resolve();
+  }).catch(reject);
+});
+  });
+}
+
+// OAuth token шалгах эсвэл авах (хэрэв login хийсэн бол token байна, цаг алдахгүй)
+const currentToken = window.gapi.client.getToken();
+if (!currentToken || !currentToken.access_token) {
+  // Token байхгүй бол хэрэглэгчийг login хийх гэж санаа өгөх (автоматаар popup нээхгүй)
+  setStatus("⚠️ Эхлээд 'Google-д нэвтрэх' товчийг дараарай. Token байхгүй байна.");
+  throw new Error("Token байхгүй. Эхлээд 'Google-д нэвтрэх' товчийг дараарай.");
+} else {
+  debugLog("✅ Token аль хэдийн байна (login хийсэн), цаг алдахгүй шууд уншиж байна");
+}
+
+// Google Sheets API-аар өгөгдөл унших
+
+// Spreadsheet metadata авах
+const metadataResponse = await window.gapi.client.sheets.spreadsheets.get({
+  spreadsheetId: sheetId
+});
+
+if (metadataResponse.status !== 200) {
+  throw new Error(`Google Sheets metadata авахад алдаа: ${metadataResponse.statusText}`);
+}
+
+const spreadsheet = metadataResponse.result;
+debugLog("Spreadsheet metadata:", spreadsheet);
+
+if (!spreadsheet.sheets || spreadsheet.sheets.length === 0) {
+  throw new Error("Google Sheets дээр sheet олдсонгүй.");
+}
+
+// Бүх sheet-үүдийг унших
+workbook = {
+  SheetNames: [],
+  Sheets: {}
+};
+
+// Бүх sheet-үүдийг унших
+for (const sheet of spreadsheet.sheets) {
+  const sheetName = sheet.properties.title;
+  const sheetGid = sheet.properties.sheetId;
+  
+  try {
+// Sheet-ийн бүх өгөгдлийг унших (A1:Z1000 хүртэл - их хэмжээний өгөгдөл)
+const valuesResponse = await window.gapi.client.sheets.spreadsheets.values.get({
+  spreadsheetId: sheetId,
+  range: `${sheetName}!A1:Z1000`
+});
+
+if (valuesResponse.status === 200) {
+  const values = valuesResponse.result.values || [];
+  
+  if (values.length > 0) {
+// XLSX формат болгон хөрвүүлэх
+const ws = XLSX.utils.aoa_to_sheet(values);
+workbook.Sheets[sheetName] = ws;
+workbook.SheetNames.push(sheetName);
+
+debugLog(`"${sheetName}" sheet уншлаа: ${values.length} мөр`);
+  } else {
+// Хоосон sheet-ийг мөн нэмэх
+const ws = XLSX.utils.aoa_to_sheet([[]]);
+workbook.Sheets[sheetName] = ws;
+workbook.SheetNames.push(sheetName);
+debugLog(`"${sheetName}" sheet хоосон байна`);
+  }
+} else {
+  debugWarn(`"${sheetName}" sheet унших алдаа: ${valuesResponse.statusText}`);
+  // Алдаа гарсан ч sheet-ийг нэмэх (хоосон)
+  const ws = XLSX.utils.aoa_to_sheet([[]]);
+  workbook.Sheets[sheetName] = ws;
+  workbook.SheetNames.push(sheetName);
+}
+  } catch (sheetErr) {
+debugWarn(`"${sheetName}" sheet унших алдаа:`, sheetErr);
+// Алдаа гарсан ч sheet-ийг нэмэх (хоосон)
+const ws = XLSX.utils.aoa_to_sheet([[]]);
+workbook.Sheets[sheetName] = ws;
+workbook.SheetNames.push(sheetName);
+  }
+}
+
+if (workbook.SheetNames.length === 0) {
+  throw new Error("Ямар ч sheet унших боломжгүй байна.");
+}
+
+// Sheet name -> GID mapping үүсгэх
+sheetNameToGidMap = {};
+if (spreadsheet.sheets) {
+  spreadsheet.sheets.forEach(sheet => {
+const sheetName = sheet.properties.title;
+const sheetGid = sheet.properties.sheetId.toString();
+sheetNameToGidMap[sheetName] = sheetGid;
+debugLog(`Sheet mapping: "${sheetName}" -> GID ${sheetGid}`);
+  });
+}
+
+// GID-аар default sheet-ийг сонгох
+const targetGid = parseInt(gid) || 0;
+if (targetGid !== 0) {
+  const targetSheet = spreadsheet.sheets.find(sheet => {
+return sheet.properties.sheetId === targetGid;
+  });
+  if (targetSheet) {
+googleSheetGid = targetSheet.properties.sheetId.toString();
+debugLog(`Default sheet: "${targetSheet.properties.title}" (GID: ${googleSheetGid})`);
+  }
+} else if (spreadsheet.sheets.length > 0) {
+  // GID байхгүй бол эхний sheet-ийг default болгох
+  googleSheetGid = spreadsheet.sheets[0].properties.sheetId.toString();
+  debugLog(`Default sheet: "${spreadsheet.sheets[0].properties.title}" (GID: ${googleSheetGid})`);
+}
+
+debugLog("Workbook уншлаа:", workbook);
+debugLog(`Нийт ${workbook.SheetNames.length} sheet уншлаа:`, workbook.SheetNames);
+
+originalFileName = `Google Sheets - ${sheetId.substring(0, 8)}.xlsx`;
+
+// Одоогийн сонгосон sheet-ийг хадгалах (хэрэв байгаа бол)
+const currentSheetBeforeRefresh = sheetSelect.value;
+populateSheetDropdown();
+
+// Хэрэв refresh хийхээс өмнө sheet сонгосон байсан бол дахин сонгох
+if (currentSheetBeforeRefresh && Array.from(sheetSelect.options).some(opt => opt.value === currentSheetBeforeRefresh)) {
+  sheetSelect.value = currentSheetBeforeRefresh;
+  loadSheet(currentSheetBeforeRefresh);
+  debugLog(`✅ Sheet сэргээлээ: "${currentSheetBeforeRefresh}"`);
+}
+
+hideLoading(); // Амжилттай дууссан тохиолдолд loading overlay хаах
+  } catch (err) {
+hideLoading(); // Алдаа гарсан тохиолдолд loading overlay хаах
+debugError("Google Sheets унших алдаа:", err);
+// Token байхгүй алдаа тохиолдолд хэрэглэгчид мэдээлэл өгөх (popup нээхгүй)
+if (err.message && (err.message.includes('Token байхгүй') || err.message.includes('OAuth'))) {
+  showError(`⚠️ Token байхгүй байна.\n\nШийдэл:\n1. Эхлээд "Google-д нэвтрэх" товчийг дараарай\n2. Дараа нь "Google Sheets унших" товчийг дараарай\n\n💡 Энэ нь reload хийхэд popup нээгдэхгүй байхын тулд хийгдсэн.`);
+} else {
+  showError(`Google Sheets уншихад алдаа гарлаа:\n\n${err?.message || err}\n\nЗөвлөмж:\n1. Google Sheets-д хандах эрхтэй эсэхийг шалгах\n2. URL зөв эсэхийг шалгах\n3. Интернэт холболт байгаа эсэхийг шалгах`);
+}
+  }
+};
+
+// Google-д нэвтрэх товч (token авах)
+const loginGoogleBtn = document.getElementById("login-google");
+const loginGoogle = async () => {
+  const clientId = googleApiKeyInput.value.trim();
+  if (!clientId) {
+showError("OAuth 2.0 Client ID оруулна уу.");
+return;
+  }
+
+  try {
+setStatus("Google-д нэвтрэж байна...", true);
+
+// File:// protocol-ийг шалгах
+if (window.location.protocol === 'file:') {
+  showError(`Файлыг шууд нээж байна (file://). Google OAuth 2.0 ажиллахгүй.\n\nЗөвлөмж:\n1. Localhost дээр ажиллуулах:\n   - Terminal/Command Prompt нээх\n   - Энэ folder руу орох\n   - "python -m http.server 8000" эсвэл "npx http-server" гэж бичих\n   - Browser дээр "http://localhost:8000" нээх\n\n2. Эсвэл VS Code Live Server extension ашиглах`);
+  return;
+}
+
+// gapi client идэвхжүүлэх (хэрэв хийгдээгүй бол)
+if (!window.gapi || !window.gapi.client || !window.gapi.client.sheets) {
+  if (!window.gapi) {
+throw new Error("Google API library ачаалагдаагүй байна. Интернэт холболт шалгаарай.");
+  }
+  
+  await new Promise((resolve, reject) => {
+window.gapi.load('client', () => {
+  window.gapi.client.init({
+'discoveryDocs': ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
+'clientId': clientId
+  }).then(() => {
+debugLog("Google API client идэвхжүүлэгдлээ");
+resolve();
+  }).catch(reject);
+});
+  });
+}
+
+// OAuth token шалгах
+const currentToken = window.gapi.client.getToken();
+if (currentToken && currentToken.access_token) {
+  setStatus("✅ Аль хэдийн нэвтэрсэн байна! Дараагийн уншилт/бичилт хурдан болно.");
+  loginGoogleBtn.textContent = "✅ Нэвтэрсэн";
+  loginGoogleBtn.style.background = "var(--success)";
+  return;
+}
+
+// Token авах
+setStatus("Google account-аар нэвтрэх шаардлагатай...");
+await new Promise((resolve, reject) => {
+  const tokenClient = google.accounts.oauth2.initTokenClient({
+client_id: clientId,
+scope: 'https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/spreadsheets',
+callback: (response) => {
+  if (response.error) {
+reject(new Error(`OAuth алдаа: ${response.error}`));
+return;
+  }
+  window.gapi.client.setToken(response);
+  debugLog("OAuth token авлаа (login)");
+  setStatus("✅ Амжилттай нэвтэрлээ! Одоо уншилт/бичилт хурдан болно.");
+  loginGoogleBtn.textContent = "✅ Нэвтэрсэн";
+  loginGoogleBtn.style.background = "var(--success)";
+  resolve();
+}
+  });
+  // prompt: 'select_account' - account сонгох (1 удаа), дараа нь cookie-д хадгалагдана, илүү хурдан
+  // prompt: 'consent' - баталгаажуулалт дахин асуух (олон цаг авна)
+  // prompt: '' - автоматаар ашиглах (token байгаа бол)
+  tokenClient.requestAccessToken({ prompt: 'select_account' });
+});
+  } catch (err) {
+debugError("Google login алдаа:", err);
+if (err.message && err.message.includes('OAuth')) {
+  showError(`Google account-аар нэвтрэх алдаа:\n\n${err.message}\n\nЗөвлөмж:\n1. OAuth 2.0 Client ID зөв эсэхийг шалгах\n2. Google Cloud Console дээр redirect URI зөв тохируулсан эсэхийг шалгах`);
+} else {
+  showError(`Google-д нэвтрэхэд алдаа гарлаа:\n\n${err?.message || err}\n\nЗөвлөмж:\n1. Интернэт холболт шалгах\n2. OAuth 2.0 Client ID зөв эсэхийг шалгах`);
+}
+loginGoogleBtn.textContent = "🔐 Google-д нэвтрэх";
+loginGoogleBtn.style.background = "var(--accent)";
+  }
+};
+
+loginGoogleBtn.addEventListener("click", loginGoogle);
+
+// Google Sheets унших товчны event listener
+loadGoogleSheetsBtn.addEventListener("click", loadGoogleSheets);
+
+// PDF файлыг харуулах хэсэг
+const pdfSection = document.getElementById("pdf-section");
+const pdfViewer = document.getElementById("pdf-viewer");
+
+// Дэд станц болон PDF файлын холбоос
+const stationPdfMap = {
+  "Буянт Ухаа": "BUYANTUHAA.pdf"
+};
+
+// localStorage-аас дэд станцуудыг ачаалах
+const loadStationsFromStorage = () => {
+  try {
+    const savedStations = localStorage.getItem("savedStations");
+    if (savedStations) {
+      const stations = JSON.parse(savedStations);
+      stations.forEach(station => {
+        // Зөвхөн одоогоор байхгүй station-уудыг нэмэх (дубль байхгүй байх)
+        const existingOption = Array.from(googleSheetsUrlInput.options).find(
+          opt => opt.value === station.url
+        );
+        if (!existingOption) {
+          const option = document.createElement("option");
+          option.value = station.url;
+          option.textContent = station.name;
+          googleSheetsUrlInput.appendChild(option);
+        }
+      });
+      debugLog("Saved stations loaded from localStorage:", stations);
+    }
+  } catch (err) {
+    debugError("Error loading stations from localStorage:", err);
+  }
+};
+
+// localStorage-д дэд станц хадгалах
+const saveStationToStorage = (name, url) => {
+  try {
+    const savedStations = localStorage.getItem("savedStations");
+    let stations = savedStations ? JSON.parse(savedStations) : [];
+    
+    // Дубль байхгүй байх
+    stations = stations.filter(s => s.url !== url);
+    stations.push({ name, url });
+    
+    localStorage.setItem("savedStations", JSON.stringify(stations));
+    debugLog("Station saved to localStorage:", { name, url });
+  } catch (err) {
+    debugError("Error saving station to localStorage:", err);
+  }
+};
+
+// Page load үед localStorage-аас дэд станцуудыг ачаалах
+loadStationsFromStorage();
+
+// Дэд станц dropdown change event listener (зөвхөн хэрэглэгч сонгосон үед л автоматаар унших)
+let lastSelectedUrl = googleSheetsUrlInput.value; // Эхний утгыг хадгалах
+googleSheetsUrlInput.addEventListener("change", () => {
+  // Зөвхөн dropdown утга үнэхээр өөрчлөгдсөн үед л унших (page load үед биш)
+  const currentValue = googleSheetsUrlInput.value.trim();
+  if (currentValue && currentValue !== lastSelectedUrl) {
+lastSelectedUrl = currentValue;
+loadGoogleSheets();
+  }
+  
+  // PDF файлыг бэлтгэх (зөвхөн "Нүүр" эсвэл "Дэд станцын схем" tab дээр байх үед харагдана)
+  const selectedOption = googleSheetsUrlInput.options[googleSheetsUrlInput.selectedIndex];
+  const stationName = selectedOption.textContent.trim();
+  const pdfFileName = stationPdfMap[stationName];
+  
+  if (pdfFileName && pdfViewer) {
+pdfViewer.src = pdfFileName;
+// Зөвхөн "Нүүр" эсвэл "Дэд станцын схем" tab дээр байх үед харагдана
+const activeTab = document.querySelector(".tab.active");
+if (activeTab && (activeTab.id === "tab-home" || activeTab.id === "tab-pdf")) {
+  pdfSection.style.display = "block";
+}
+  }
+});
+
+// Эхлээд сонгосон дэд станцын PDF файлыг бэлтгэх
+if (googleSheetsUrlInput.value.trim() && pdfViewer) {
+  const selectedOption = googleSheetsUrlInput.options[googleSheetsUrlInput.selectedIndex];
+  const stationName = selectedOption.textContent.trim();
+  const pdfFileName = stationPdfMap[stationName];
+  
+  if (pdfFileName) {
+pdfViewer.src = pdfFileName;
+  }
+}
+
+// Tab switching логик
+const tabHome = document.getElementById("tab-home");
+const tabCard = document.getElementById("tab-card");
+const tabPdf = document.getElementById("tab-pdf");
+
+const activateTab = (tabName) => {
+  // Бүх tabs-ийг inactive болгох
+  tabHome.classList.remove("active");
+  tabCard.classList.remove("active");
+  tabPdf.classList.remove("active");
+  
+  // Бүх sections-ийг нуух
+  viewSection.style.display = "none";
+  historySection.style.display = "none";
+  pdfSection.style.display = "none";
+  
+  if (tabName === "home") {
+// "Нүүр" tab - бүх зүйл харагдана
+tabHome.classList.add("active");
+viewSection.style.display = "block";
+historySection.style.display = "block";
+pdfSection.style.display = "block";
+  } else if (tabName === "card") {
+// "Тавилын карт" tab - зөвхөн view-section болон history-section харагдана
+tabCard.classList.add("active");
+viewSection.style.display = "block";
+historySection.style.display = "block";
+  } else if (tabName === "pdf") {
+// "Дэд станцын схем" tab - зөвхөн PDF харагдана
+tabPdf.classList.add("active");
+pdfSection.style.display = "block";
+
+// PDF файлыг харуулах
+if (pdfSection && pdfViewer) {
+  const selectedOption = googleSheetsUrlInput.options[googleSheetsUrlInput.selectedIndex];
+  const stationName = selectedOption.textContent.trim();
+  const pdfFileName = stationPdfMap[stationName];
+  
+  if (pdfFileName) {
+pdfViewer.src = pdfFileName;
+  }
+}
+  }
+};
+
+tabHome.addEventListener("click", () => activateTab("home"));
+tabCard.addEventListener("click", () => activateTab("card"));
+tabPdf.addEventListener("click", () => activateTab("pdf"));
+
+// Дэд станц нэмэх функц
+const toggleAddStationBtn = document.getElementById("toggle-add-station");
+const addStationForm = document.getElementById("add-station-form");
+const addStationBtn = document.getElementById("add-station");
+const newStationNameInput = document.getElementById("new-station-name");
+const newStationUrlInput = document.getElementById("new-station-url");
+
+// Товч дарахад form нээх/хаах
+if (toggleAddStationBtn && addStationForm) {
+  toggleAddStationBtn.addEventListener("click", () => {
+    const isVisible = addStationForm.style.display !== "none";
+    addStationForm.style.display = isVisible ? "none" : "block";
+    toggleAddStationBtn.textContent = isVisible ? "➕ Дэд станц нэмэх" : "❌ Хаах";
+    if (!isVisible) {
+      newStationNameInput.focus();
+    }
+  });
+}
+
+if (addStationBtn && newStationNameInput && newStationUrlInput) {
+  addStationBtn.addEventListener("click", () => {
+    const stationName = newStationNameInput.value.trim();
+    const stationUrl = newStationUrlInput.value.trim();
+    
+    if (!stationName) {
+      showError("Дэд станцын нэр оруулна уу.");
+      return;
+    }
+    
+    if (!stationUrl) {
+      showError("Google Sheets URL оруулна уу.");
+      return;
+    }
+    
+    // Google Sheets URL зөв эсэхийг шалгах
+    if (!stationUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)) {
+      showError("Google Sheets URL буруу байна. Жишээ: https://docs.google.com/spreadsheets/d/SHEET_ID/edit");
+      return;
+    }
+    
+    // Dropdown-д шинэ option нэмэх
+    const option = document.createElement("option");
+    option.value = stationUrl;
+    option.textContent = stationName;
+    googleSheetsUrlInput.appendChild(option);
+    
+    // localStorage-д хадгалах
+    saveStationToStorage(stationName, stationUrl);
+    
+    // Шинээр нэмсэн option-ийг сонгох
+    googleSheetsUrlInput.value = stationUrl;
+    
+    // Input field-үүдийг хоослох
+    newStationNameInput.value = "";
+    newStationUrlInput.value = "";
+    
+    // Form-ийг хаах
+    if (addStationForm) {
+      addStationForm.style.display = "none";
+      if (toggleAddStationBtn) {
+        toggleAddStationBtn.textContent = "➕ Дэд станц нэмэх";
+      }
+    }
+    
+    setStatus(`✅ "${stationName}" дэд станц амжилттай нэмэгдлээ.`);
+    debugLog(`Шинэ дэд станц нэмэгдлээ: ${stationName} - ${stationUrl}`);
+  });
+  
+  // Enter дархад нэмэх (нэр input дээр)
+  newStationNameInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      newStationUrlInput.focus();
+    }
+  });
+  
+  // Enter дархад нэмэх (URL input дээр)
+  newStationUrlInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      addStationBtn.click();
+    }
+  });
+}
+
+// Page load хийхэд file:// protocol-ийг шалгах
+if (window.location.protocol === 'file:') {
+  const warningMsg = `⚠️ Файлыг шууд нээж байна (file://). Google OAuth 2.0 ажиллахгүй.\n\nЗөвлөмж:\n1. Localhost дээр ажиллуулах:\n   - Terminal/Command Prompt нээх\n   - Энэ folder руу орох\n   - "python -m http.server 8000" эсвэл "npx http-server" гэж бичих\n   - Browser дээр "http://localhost:8000" нээх\n\n2. Эсвэл VS Code Live Server extension ашиглах`;
+  setStatus(warningMsg);
+  debugWarn(warningMsg);
+}
