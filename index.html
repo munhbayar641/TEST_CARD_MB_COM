@@ -396,8 +396,31 @@
       </div>
       <div>
         <label>Google OAuth 2.0 Client ID (Хадгалахад шаардлагатай)</label>
-        <input id="google-api-key" type="text" value="298828856664-7phl22m56lopgbga190r6f2rjthvidc2.apps.googleusercontent.com" placeholder="YOUR_CLIENT_ID.apps.googleusercontent.com" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 14px;" />
+        <select id="google-api-key" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 14px; background: #fff; color: var(--text); font-family: inherit;">
+          <option value="298828856664-7phl22m56lopgbga190r6f2rjthvidc2.apps.googleusercontent.com">Client ID 1 (анхны)</option>
+          <option value="298828856664-dirmfke0i40f0e0vcmk4j92mp0ig1k9s.apps.googleusercontent.com">Client ID 2 (шинэ)</option>
+        </select>
          <p class="tip-text">💡 Google Cloud Console → API & Services → Credentials → OAuth 2.0 Client ID үүсгэх</p>
+         <details style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 6px; border: 1px solid #ffc107;">
+           <summary style="cursor: pointer; font-weight: 600; color: #856404; font-size: 13px;">⚠️ Error 400: redirect_uri_mismatch алдаа засах</summary>
+           <div style="margin-top: 8px; padding-left: 8px; font-size: 12px; color: #856404; line-height: 1.6;">
+             <p><strong>Алдааны шалтгаан:</strong> Одоогийн URL нь Google Cloud Console дээр тохируулсан "Authorized redirect URIs"-тай таарахгүй байна.</p>
+             <p style="margin-top: 8px;"><strong>Засах арга:</strong></p>
+             <ol style="margin-left: 20px; margin-top: 4px;">
+               <li>Google Cloud Console → APIs & Services → Credentials руу орох</li>
+               <li>Дээрх dropdown-аас сонгосон Client ID дээр дарах</li>
+               <li>"Authorized redirect URIs" хэсэгт одоогийн URL-аа нэмэх:</li>
+               <li style="list-style: none; margin-left: -20px; margin-top: 4px;">
+                 - Локал сервер: <code>http://localhost:8000</code> эсвэл <code>http://127.0.0.1:8000</code><br/>
+                 - GitHub Pages: <code>https://yourusername.github.io</code><br/>
+                 - Онлайн веб: <code>https://yourdomain.com</code>
+               </li>
+               <li>"Save" дарах</li>
+               <li>Browser-ийг refresh хийх (F5)</li>
+             </ol>
+           </div>
+         </details>
+         <p class="tip-text" style="color: var(--warning); margin-top: 4px;">⚠️ Error 400: redirect_uri_mismatch алдаа гарвал: Google Cloud Console дээр "Authorized redirect URIs" тохируулах хэрэгтэй</p>
       </div>
       <div>
         <label>Sheet (хуудас)</label>
