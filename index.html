@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="РХАХТА РХА-Н тавилын карт - Google Sheets өгөгдөл унших, засах, хадгалах систем" />
+  <meta name="keywords" content="тавилын карт, Google Sheets, РХАХТА" />
+  <meta name="author" content="РХАХТА" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>РХАХТА РХА-Н тавилын карт</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- SheetJS CDN for reading Excel files -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <!-- Google API JavaScript client library -->
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
+</head>
+ <body>
+   <div class="container" id="main-content">
+    <div style="margin-bottom: 16px;">
+      <h1 style="margin: 0 0 8px;">📊 РХАХТА РХА-Н тавилын карт</h1>
+      <p class="sub" style="margin: 0;">Боломжгүй зүйл гэж байхгүй.</p>
+    </div>
+     <div class="tabs">
+       <button class="tab active" id="tab-home">🏠 Нүүр</button>
+       <button class="tab" id="tab-card">📊 Тавилын карт</button>
+       <button class="tab" id="tab-pdf">📄 Дэд станцын схем</button>
+     </div>
+
+  <div id="view-section">
+  <div class="card">
+    <div class="controls">
+      <div>
+        <label>Дэд станц</label>
+        <select id="google-sheets-url" style="width: 100%; padding: 12px 16px; border-radius: 10px; border: 2px solid var(--border); background: #fff; color: var(--text); font-size: 14px; font-family: inherit; transition: all 0.2s ease;">
+          <option value="https://docs.google.com/spreadsheets/d/1l_avCSP5aogtMvHYr2IL9vz3WY8ToYvBp-el28rI4Z0/edit?pli=1&gid=1366441472#gid=1366441472">Буянт Ухаа</option>
+          <option value="https://docs.google.com/spreadsheets/d/1GMSGQ0xEN6A0QYfnFPrsOcaKGSK0iomUZikCGA8G80I/edit?gid=1823631129#gid=1823631129">Дэд станц 2</option>
+        </select>
+        <button id="toggle-add-station" style="margin-top: 8px; width: 100%; padding: 10px 16px; border-radius: 8px; border: 2px solid var(--border); background: #f8f9fa; color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer;">➕ Дэд станц нэмэх</button>
+        <div id="add-station-form" style="display: none; margin-top: 8px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid var(--border);">
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <input type="text" id="new-station-name" placeholder="Дэд станцын нэр" style="flex: 1; padding: 10px 12px; border-radius: 8px; border: 2px solid var(--border); background: #fff; color: var(--text); font-size: 13px; font-family: inherit;">
+            <input type="text" id="new-station-url" placeholder="Google Sheets URL" style="flex: 2; padding: 10px 12px; border-radius: 8px; border: 2px solid var(--border); background: #fff; color: var(--text); font-size: 13px; font-family: inherit;">
+          </div>
+          <button id="add-station" style="width: 100%; padding: 10px 16px; border-radius: 8px; border: none; background: var(--success); color: white; font-size: 13px; font-weight: 600; cursor: pointer;">✅ Нэмэх</button>
+        </div>
+         <button id="login-google" style="margin-top: 8px; background: var(--accent); color: white;">🔐 Google-д нэвтрэх</button>
+         <button id="load-google-sheets" style="margin-top: 8px;">📥 Google Sheets унших</button>
+      </div>
+      <div>
+        <label>Google OAuth 2.0 Client ID (Хадгалахад шаардлагатай)</label>
+        <select id="google-api-key" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 14px; background: #fff; color: var(--text); font-family: inherit;">
+          <option value="298828856664-7phl22m56lopgbga190r6f2rjthvidc2.apps.googleusercontent.com">Client ID 1 (анхны)</option>
+          <option value="298828856664-dirmfke0i40f0e0vcmk4j92mp0ig1k9s.apps.googleusercontent.com">Client ID 2 (шинэ)</option>
+        </select>
+      </div>
+      <div>
+        <label>Sheet (хуудас)</label>
+        <select id="sheet-select"></select>
+      </div>
+      <div>
+        <label>Тоноглолын нэр</label>
+        <select id="equipment-select" style="width: 100%; padding: 12px 16px; border-radius: 10px; border: 2px solid var(--border); background: #fff; color: var(--text); font-size: 14px; font-family: inherit; transition: all 0.2s ease;">
+          <option value="__all__">Бүгд</option>
+        </select>
+      </div>
+    </div>
+    <div class="filters">
+      <div class="pill" id="summary-pill">Мэдээлэл хараахан уншаагүй байна</div>
+    </div>
+    <div id="status" class="status"></div>
+  </div>
+
+  </div>
+
+  <!-- PDF файлыг харуулах хэсэг -->
+  <div id="pdf-section" class="card" style="margin-top: 24px; display: none;">
+    <h3 style="margin: 0 0 16px;">Дэд станцын схем</h3>
+    <div style="width: 100%; height: 800px; border: 2px solid var(--border); border-radius: 12px; overflow: hidden;">
+      <iframe id="pdf-viewer" src="" style="width: 100%; height: 100%; border: none;"></iframe>
+    </div>
+  </div>
+
+  <div id="history-section">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+        <h3 style="margin: 0;">Түүх / Шүүсэн хүснэгт</h3>
+        <div style="display:flex;gap:8px;">
+          <button id="save-to-google-sheets">☁️ Google Sheets дээр хадгалах</button>
+          <button id="download-updated">💾 Excel файл хадгалах</button>
+        </div>
+      </div>
+      <div class="table-wrap" id="history-table-container"></div>
+    </div>
+  </div>
+
+  <script src="index.js" defer></script>
+  </div>
+</body>
+</html>
+
